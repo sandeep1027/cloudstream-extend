@@ -81,6 +81,27 @@ object SettingsPlayerScreen : SearchableSettings {
                 ),
             ),
             Preference.PreferenceGroup(
+                title = stringResource(R.string.pref_category_debrid),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.torrinEnabled,
+                        title = stringResource(R.string.torrin_enabled),
+                        subtitle = stringResource(R.string.torrin_enabled_des),
+                        icon = painterResource(R.drawable.dns_24px),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.debrid.torrinApiKey,
+                        title = stringResource(R.string.torrin_api_key),
+                        subtitle = stringResource(R.string.torrin_api_key_des),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.debrid.torrinBaseUrl,
+                        title = stringResource(R.string.torrin_base_url),
+                        subtitle = stringResource(R.string.torrin_base_url_des),
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
                 title = stringResource(R.string.pref_category_player_features),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.ListPreference(

@@ -86,6 +86,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.debugAssert
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safe
+import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.CustomDecoder.Companion.fixSubtitleAlignment
 import com.lagradost.cloudstream3.ui.player.live.LiveHelper
 import com.lagradost.cloudstream3.ui.player.live.PREFERRED_LIVE_OFFSET
@@ -1804,6 +1805,50 @@ class CS3IPlayer : IPlayer {
         }
     }
 
+    /**
+     * Plays a torrent/magnet link through the local torrent engine.
+     * If the user has already consented to local torrent streaming in this
+     * session the link is played directly, otherwise a consent dialog is shown
+     * first to prevent accidental torrent sessions.
+     */
+    @MainThread
+    private fun playLocalTorrent(context: Context, link: ExtractorLink) {
+        if (Torrent.hasAcceptedTorrentForThisSession == true) {
+            loadTorrent(context, link)
+            return
+        }
+
+        val builder: AlertDialog.Builder = AlertDialog.Builder(context)
+
+        val dialogClickListener =
+            DialogInterface.OnClickListener { _, which ->
+                when (which) {
+                    DialogInterface.BUTTON_POSITIVE -> {
+                        Torrent.hasAcceptedTorrentForThisSession = true
+                        loadTorrent(context, link)
+                    }
+
+                    DialogInterface.BUTTON_NEGATIVE -> {
+                        Torrent.hasAcceptedTorrentForThisSession = false
+                        val errorMessage =
+                            context.getString(R.string.torrent_not_accepted)
+                        event(ErrorEvent(ErrorLoadingException(errorMessage)))
+                    }
+                }
+            }
+
+        builder.setTitle(R.string.play_torrent_button)
+            .setMessage(R.string.torrent_info)
+            // Ensure that the user will not accidentally start a torrent session.
+            .setCancelable(false).setOnCancelListener {
+                val errorMessage = context.getString(R.string.torrent_not_accepted)
+                event(ErrorEvent(ErrorLoadingException(errorMessage)))
+            }
+            .setPositiveButton(R.string.ok, dialogClickListener)
+            .setNegativeButton(R.string.go_back, dialogClickListener)
+            .show().setDefaultFocus()
+    }
+
     @SuppressLint("UnsafeOptInUsageError")
     @MainThread
     private fun loadOnlinePlayer(context: Context, link: ExtractorLink, retry: Boolean = false) {
@@ -1837,12 +1882,6 @@ class CS3IPlayer : IPlayer {
                         event(ErrorEvent(ErrorLoadingException(errorMessage)))
                         return
                     }
-
-                    if (Torrent.hasAcceptedTorrentForThisSession == false) {
-                        val errorMessage = context.getString(R.string.torrent_not_accepted)
-                        event(ErrorEvent(ErrorLoadingException(errorMessage)))
-                        return
-                    }
                     // load the initial UI, we require an exoPlayer to be alive
                     if (!retry) {
                         // this causes a *bug* that restarts all torrents from 0
@@ -1857,41 +1896,44 @@ class CS3IPlayer : IPlayer {
                         )
                     )
 
-                    if (Torrent.hasAcceptedTorrentForThisSession == true) {
-                        loadTorrent(context, link)
-                        return
-                    }
-
-                    val builder: AlertDialog.Builder = AlertDialog.Builder(context)
-
-                    val dialogClickListener =
-                        DialogInterface.OnClickListener { _, which ->
-                            when (which) {
-                                DialogInterface.BUTTON_POSITIVE -> {
-                                    Torrent.hasAcceptedTorrentForThisSession = true
-                                    loadTorrent(context, link)
-                                }
-
-                                DialogInterface.BUTTON_NEGATIVE -> {
-                                    Torrent.hasAcceptedTorrentForThisSession = false
-                                    val errorMessage =
-                                        context.getString(R.string.torrent_not_accepted)
-                                    event(ErrorEvent(ErrorLoadingException(errorMessage)))
+                    // When Torrin is configured, resolve the magnet through the
+                    // debrid service first. This intentionally happens before
+                    // the local torrent consent check below, since Torrin does
+                    // not start a local torrent session. Only when Torrin fails
+                    // do we fall back to the local torrent flow, including its
+                    // consent rules.
+                    if (link.type == ExtractorLinkType.MAGNET && Torrin.isEnabled(context)) {
+                        ioSafe {
+                            val torrinLink = Torrin.transformLink(context, link)
+                            if (exoPlayer == null) return@ioSafe
+                            runOnMainThread {
+                                if (exoPlayer == null) return@runOnMainThread
+                                when {
+                                    torrinLink != null ->
+                                        loadOnlinePlayer(context, torrinLink, retry = true)
+                                    Torrent.hasAcceptedTorrentForThisSession == false -> {
+                                        val errorMessage =
+                                            context.getString(R.string.torrent_not_accepted)
+                                        event(ErrorEvent(ErrorLoadingException(errorMessage)))
+                                    }
+                                    else -> playLocalTorrent(context, link)
                                 }
                             }
                         }
+                        return
+                    }
 
-                    builder.setTitle(R.string.play_torrent_button)
-                        .setMessage(R.string.torrent_info)
-                        // Ensure that the user will not accidentally start a torrent session.
-                        .setCancelable(false).setOnCancelListener {
-                            val errorMessage = context.getString(R.string.torrent_not_accepted)
-                            event(ErrorEvent(ErrorLoadingException(errorMessage)))
-                        }
-                        .setPositiveButton(R.string.ok, dialogClickListener)
-                        .setNegativeButton(R.string.go_back, dialogClickListener)
-                        .show().setDefaultFocus()
+                    if (Torrent.hasAcceptedTorrentForThisSession == false) {
+                        val errorMessage = context.getString(R.string.torrent_not_accepted)
+                        event(ErrorEvent(ErrorLoadingException(errorMessage)))
+                        return
+                    }
 
+                    playLocalTorrent(context, link)
+                    // This when is an expression (its value is assigned to `mime`
+                    // below), so every branch must end with a `return` (type
+                    // `Nothing`). A bare trailing call would make this branch's
+                    // type `Unit` and widen `mime` to `Any`.
                     return
                 }
             }

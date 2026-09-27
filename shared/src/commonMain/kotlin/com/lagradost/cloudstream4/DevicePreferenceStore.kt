@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.AllLanguagesName
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.TvType
+import com.mihon.common.preference.PreferenceData
 import com.mihon.common.preference.PreferenceStore
 import com.mihon.common.preference.getEnumSet
 
@@ -30,6 +31,7 @@ class AppSettings internal constructor(
     val updates = UpdatePreferences(preferences)
     val backup = BackupPreferences(preferences)
     val plugins = PluginPreferences(preferences)
+    val debrid = DebridPreferences(preferences)
 }
 
 class PluginPreferences(preferences: PreferenceStore) {
@@ -202,4 +204,26 @@ class GeneralPreferences(preferences: PreferenceStore) {
     /** This should honesty be refactored to a single setting */
     val downloadPath = preferences.getString("download_path_key", "")
     val downloadPathVisual = preferences.getString("download_path_key_visual", "")
+}
+
+/**
+ * Debrid service settings. Currently Torrin (https://torrin.app):
+ * resolves magnet links into directly playable, signed HTTPS streams
+ * instead of streaming them through the local torrent engine.
+ */
+class DebridPreferences(preferences: PreferenceStore) {
+    companion object {
+        const val KEY_ENABLED = "torrin_enabled_key"
+        const val KEY_BASE_URL = "torrin_base_url_key"
+        const val KEY_TIMEOUT_SECONDS = "torrin_timeout_seconds_key"
+        /** Stored under a private key so the secret is not exposed by backup/restore flows. */
+        val KEY_API_KEY = PreferenceData.privateKey("torrin_api_key_key")
+        const val DEFAULT_BASE_URL = "https://api.torrin.app"
+        const val DEFAULT_TIMEOUT_SECONDS = 90
+    }
+
+    val torrinEnabled = preferences.getBoolean(KEY_ENABLED, false)
+    val torrinApiKey = preferences.getString(KEY_API_KEY)
+    val torrinBaseUrl = preferences.getString(KEY_BASE_URL, DEFAULT_BASE_URL)
+    val torrinTimeoutSeconds = preferences.getInt(KEY_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
 }
