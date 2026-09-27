@@ -1909,8 +1909,13 @@ class CS3IPlayer : IPlayer {
                             runOnMainThread {
                                 if (exoPlayer == null) return@runOnMainThread
                                 when {
-                                    torrinLink != null ->
+                                    torrinLink != null -> {
+                                        // Release the local-torrent player before loading the
+                                        // resolved direct URL (the exoPlayer setter asserts
+                                        // against replacing a live player instance).
+                                        releasePlayer()
                                         loadOnlinePlayer(context, torrinLink, retry = true)
+                                    }
                                     Torrent.hasAcceptedTorrentForThisSession == false -> {
                                         val errorMessage =
                                             context.getString(R.string.torrent_not_accepted)
