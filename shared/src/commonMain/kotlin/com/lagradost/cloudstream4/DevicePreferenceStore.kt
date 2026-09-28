@@ -154,6 +154,9 @@ class ProviderPreferences(preferences: PreferenceStore) {
     val displayDubSub = preferences.getStringSet(
         "display_sub_key", defaultDub
     )
+
+    /** User supplied TheMovieDB API key. Empty falls back to the built-in public key. */
+    val tmdbApiKey = preferences.getString("tmdb_api_key", "")
 }
 
 class PlayerPreferences(preferences: PreferenceStore) {

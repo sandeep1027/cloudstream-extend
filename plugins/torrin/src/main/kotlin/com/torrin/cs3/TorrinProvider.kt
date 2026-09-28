@@ -3,6 +3,7 @@ package com.torrin.cs3
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
+import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
 import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
@@ -725,9 +726,11 @@ class TorrinProvider : MainAPI() {
         const val TORRENTIO_STREAM = "https://torrentio.strem.fun/stream/%s/%s.json"
 
         // TMDB — metadata (plot/poster/year) source. Resolves IMDb ids and
-        // fetches overview + poster. Key baked into the plugin (no settings in
-        // an extension), like the app's own TmdbProvider does.
-        const val TMDB_API_KEY = "9f80b1a1a0112b04448d986f35313bbc"
+        // fetches overview + poster. Uses the user supplied key from settings
+        // (Settings -> Player -> Metadata) when present, else the built-in key.
+        const val DEFAULT_TMDB_API_KEY = "9f80b1a1a0112b04448d986f35313bbc"
+        val TMDB_API_KEY: String
+            get() = tmdbApiKeyOverride ?: DEFAULT_TMDB_API_KEY
         const val TMDB_BASE = "https://api.themoviedb.org/3"
         const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 

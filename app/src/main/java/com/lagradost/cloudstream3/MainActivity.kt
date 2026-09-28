@@ -179,7 +179,9 @@ import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
 import com.lagradost.cloudstream3.utils.setText
 import com.lagradost.cloudstream3.utils.setTextHtml
 import com.lagradost.cloudstream3.utils.txt
+import com.lagradost.cloudstream4.AppSettings
 import com.lagradost.cloudstream4.theme.CloudStreamTheme
+import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
 import com.lagradost.safefile.SafeFile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -642,6 +644,8 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         super.onResume()
         afterPluginsLoadedEvent += ::onAllPluginsLoaded
         setActivityInstance(this)
+        // Keep the user supplied TMDB API key in sync for the library metaprovider
+        tmdbApiKeyOverride = AppSettings(this).provider.tmdbApiKey.get().takeIf { it.isNotBlank() }
         try {
             if (isCastApiAvailable()) {
                 mSessionManager?.addSessionManagerListener(mSessionManagerListener)

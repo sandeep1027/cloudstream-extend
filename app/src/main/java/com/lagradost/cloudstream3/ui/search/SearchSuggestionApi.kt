@@ -2,6 +2,7 @@ package com.lagradost.cloudstream3.ui.search
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.nicehttp.NiceResponse
 import kotlinx.serialization.SerialName
@@ -13,7 +14,10 @@ import kotlinx.serialization.Serializable
  */
 object SearchSuggestionApi {
     private const val TMDB_API_URL = "https://api.themoviedb.org/3/search/multi"
-    private const val TMDB_API_KEY = "e6333b32409e02a4a6eba6fb7ff866bb"
+
+    // User supplied key from Settings -> Player -> Metadata, else the built-in public key
+    private val TMDB_API_KEY: String
+        get() = tmdbApiKeyOverride ?: "e6333b32409e02a4a6eba6fb7ff866bb"
     
     @Serializable
     data class TmdbSearchResult(

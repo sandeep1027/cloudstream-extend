@@ -50,6 +50,13 @@ data class TmdbLink(
     @JsonProperty("movieName") @SerialName("movieName") val movieName: String? = null,
 )
 
+/**
+ * User supplied TheMovieDB API key, set by the app layer from user settings
+ * (Settings -> Player -> Metadata). When null or blank the built-in public
+ * key is used as fallback.
+ */
+var tmdbApiKeyOverride: String? = null
+
 open class TmdbProvider : MainAPI() {
     // This should always be false, but might as well make it easier for forks
     open val includeAdult = false
@@ -64,7 +71,9 @@ open class TmdbProvider : MainAPI() {
     override val hasMainPage = true
     override val providerType = ProviderType.MetaProvider
 
-    private val tmdbApiKey = "e6333b32409e02a4a6eba6fb7ff866bb"
+    private val tmdbApiKey: String
+        get() = tmdbApiKeyOverride?.takeIf { it.isNotBlank() }
+            ?: "e6333b32409e02a4a6eba6fb7ff866bb"
     private val tmdbApiUrl = "https://api.themoviedb.org/3"
 
     @Serializable
