@@ -1,11 +1,46 @@
-# CloudStream
+# CloudStream Extend
 
-**⚠️ Warning: By default, this app doesn't provide any video sources; you have to install extensions to add functionality to the app.**
+**An unofficial fork of [CloudStream](https://github.com/recloudstream/cloudstream) with built-in debrid support (Torrin & TorBox) and a bundled Indian-content extension.**
+
+> ⚠️ **Legal notice:** This project is a **fork** of [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream), which is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. The GPL license file is preserved in this repository (`LICENSE`). All original copyright belongs to the CloudStream authors and contributors. All modifications made in this fork are released under the same GPL-3.0 license.
+>
+> ⚠️ By default, the app doesn't provide any video sources; you have to install extensions to add functionality. This project does not host, stream, or provide any copyrighted media — playback is resolved through the user's own Torrin/TorBox accounts, and content sources come from community extensions.
 
 [![Discord](https://invidget.switchblade.xyz/5Hus6fM)](https://discord.gg/5Hus6fM)
 
+## What this fork adds
 
-## Table of Contents: 
++ **Torrin debrid integration (app core):** magnet links from any extension are resolved through your [Torrin](https://torrin.app) account into direct, signed HTTPS streams (no local torrent engine needed). Settings → Player → Debrid.
++ **TorBox debrid integration (app core):** same flow for [TorBox](https://torbox.app). Falls back Torrin → TorBox → local torrent automatically.
++ **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer.
+
+### Install the plugin
+
+Settings → Extensions → Add repository:
+
+```
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin/repo
+```
+
+Then install **Torrin** from the repository and enable your debrid account(s) in Settings → Player → Debrid.
+
+### APK
+
+Prebuilt APKs are available on the [Releases page](https://github.com/sandeep1027/cloudstream-extend/releases).
+
+## Credits
+
++ Original app: [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream) (GPL-3.0) — all credit for the base application goes to the CloudStream team and its contributors.
++ Fork & debrid integrations: `sandeep1027` (this repository).
++ Torrin API: [torrin.app](https://torrin.app) · TorBox API: [torbox.app](https://torbox.app) · TMDB data: [themoviedb.org](https://www.themoviedb.org/) (used per [their API terms](https://www.themoviedb.org/documentation/rules)).
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE). This fork is a derivative work of CloudStream and must be distributed under the same terms: keep this license, keep attribution, and publish source for any modifications (this repository is the source).
+
+---
+
+## Table of Contents (upstream)
 + [About Us:](#about_us)
 + [Installation Steps:](#install_rules)
 + [Contributing:](#contributing)
@@ -60,7 +95,7 @@ Our documentation provides the steps to install and configure CloudStream for yo
 <a id="contributing"></a>
 
 ## Contributing:
-We **happily** accept any contributions to our project. To find out where you can start contributing towards the project, please look [at our issues tab](/cloudstream/issues)
+We **happily** accept any contributions to our project. To find out where you can start contributing towards our project, please look [at our issues tab](/cloudstream/issues)
 
 
 
@@ -104,7 +139,7 @@ As well as providing clear install steps, our [website](https://dweb.link/ipns/c
 
 ### Supported languages:
 
-Even if you can't contribute to the code or documentation, we always look for those who can contribute to translation and language support. Your contribution is exceptionally appreciated; you can check our translation from the figure below. 
+Even if you can't contribute to the code or documentation, we always look for those who can contribute in translation and language support. Your contribution is exceptionally appreciated; you can check our translation from the figure below. 
 
 <a href="https://hosted.weblate.org/engage/cloudstream/">
   <img src="https://hosted.weblate.org/widgets/cloudstream/-/app/multi-auto.svg" alt="Translation status" />
