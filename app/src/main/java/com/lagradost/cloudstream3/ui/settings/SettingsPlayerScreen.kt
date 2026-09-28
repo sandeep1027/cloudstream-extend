@@ -99,6 +99,17 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torrin_base_url),
                         subtitle = stringResource(R.string.torrin_base_url_des),
                     ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.torboxEnabled,
+                        title = stringResource(R.string.torbox_enabled),
+                        subtitle = stringResource(R.string.torbox_enabled_des),
+                        icon = painterResource(R.drawable.dns_24px),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.debrid.torboxApiKey,
+                        title = stringResource(R.string.torbox_api_key),
+                        subtitle = stringResource(R.string.torbox_api_key_des),
+                    ),
                 ),
             ),
             Preference.PreferenceGroup(

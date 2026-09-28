@@ -207,9 +207,10 @@ class GeneralPreferences(preferences: PreferenceStore) {
 }
 
 /**
- * Debrid service settings. Currently Torrin (https://torrin.app):
- * resolves magnet links into directly playable, signed HTTPS streams
- * instead of streaming them through the local torrent engine.
+ * Debrid service settings. Torrin (https://torrin.app) and TorBox
+ * (https://torbox.app): resolve magnet links into directly playable,
+ * signed HTTPS streams instead of streaming them through the local torrent
+ * engine.
  */
 class DebridPreferences(preferences: PreferenceStore) {
     companion object {
@@ -220,10 +221,19 @@ class DebridPreferences(preferences: PreferenceStore) {
         val KEY_API_KEY = PreferenceData.privateKey("torrin_api_key_key")
         const val DEFAULT_BASE_URL = "https://api.torrin.app"
         const val DEFAULT_TIMEOUT_SECONDS = 90
+
+        const val KEY_TORBOX_ENABLED = "torbox_enabled_key"
+        val KEY_TORBOX_API_KEY = PreferenceData.privateKey("torbox_api_key_key")
+        const val KEY_TORBOX_TIMEOUT_SECONDS = "torbox_timeout_seconds_key"
+        const val DEFAULT_TORBOX_BASE_URL = "https://api.torbox.app/v1/api"
     }
 
     val torrinEnabled = preferences.getBoolean(KEY_ENABLED, false)
     val torrinApiKey = preferences.getString(KEY_API_KEY)
     val torrinBaseUrl = preferences.getString(KEY_BASE_URL, DEFAULT_BASE_URL)
     val torrinTimeoutSeconds = preferences.getInt(KEY_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
+
+    val torboxEnabled = preferences.getBoolean(KEY_TORBOX_ENABLED, false)
+    val torboxApiKey = preferences.getString(KEY_TORBOX_API_KEY)
+    val torboxTimeoutSeconds = preferences.getInt(KEY_TORBOX_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
 }

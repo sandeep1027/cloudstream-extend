@@ -1,0 +1,9 @@
+{
+  "iconUrl": null,
+  "name": "Torrin Extensions",
+  "description": "Torrent-powered dashboard + Torrin debrid playback for CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "http://10.0.2.2:8088/plugins.json"
+  ]
+}

@@ -86,6 +86,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.debugAssert
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safe
+import com.lagradost.cloudstream3.torrin.TorBox
 import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.CustomDecoder.Companion.fixSubtitleAlignment
 import com.lagradost.cloudstream3.ui.player.live.LiveHelper
@@ -1896,25 +1897,30 @@ class CS3IPlayer : IPlayer {
                         )
                     )
 
-                    // When Torrin is configured, resolve the magnet through the
-                    // debrid service first. This intentionally happens before
-                    // the local torrent consent check below, since Torrin does
-                    // not start a local torrent session. Only when Torrin fails
-                    // do we fall back to the local torrent flow, including its
-                    // consent rules.
-                    if (link.type == ExtractorLinkType.MAGNET && Torrin.isEnabled(context)) {
+                    // When a debrid service (Torrin, then TorBox) is
+                    // configured, resolve the magnet through it first. This
+                    // intentionally happens before the local torrent consent
+                    // check below, since a debrid does not start a local
+                    // torrent session. Only when every debrid fails do we fall
+                    // back to the local torrent flow, including its consent
+                    // rules.
+                    val torrinEnabled = Torrin.isEnabled(context)
+                    val torboxEnabled = TorBox.isEnabled(context)
+                    if (link.type == ExtractorLinkType.MAGNET && (torrinEnabled || torboxEnabled)) {
                         ioSafe {
-                            val torrinLink = Torrin.transformLink(context, link)
+                            val debridLink =
+                                (if (torrinEnabled) Torrin.transformLink(context, link) else null)
+                                    ?: (if (torboxEnabled) TorBox.transformLink(context, link) else null)
                             if (exoPlayer == null) return@ioSafe
                             runOnMainThread {
                                 if (exoPlayer == null) return@runOnMainThread
                                 when {
-                                    torrinLink != null -> {
+                                    debridLink != null -> {
                                         // Release the local-torrent player before loading the
                                         // resolved direct URL (the exoPlayer setter asserts
                                         // against replacing a live player instance).
                                         releasePlayer()
-                                        loadOnlinePlayer(context, torrinLink, retry = true)
+                                        loadOnlinePlayer(context, debridLink, retry = true)
                                     }
                                     Torrent.hasAcceptedTorrentForThisSession == false -> {
                                         val errorMessage =

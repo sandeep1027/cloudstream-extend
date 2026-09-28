@@ -30,6 +30,8 @@ object Torrin {
 
     private const val POLL_INTERVAL_MS = 2_000L
 
+    private val FILE_HINT_PATTERN = Regex("[&?]cs_file=(\\d+)")
+
     private const val STATUS_COMPLETE = "complete"
     private const val STATUS_FAILED = "failed"
     private const val STATUS_EVICTED = "evicted"
@@ -112,13 +114,33 @@ object Torrin {
         val timeoutMs = getTimeoutSeconds(context) * 1000L
 
         return try {
-            val job = submitJob(baseUrl, apiKey, link.url) ?: return null
+            val (cleanMagnet, preferredFile) = parseFileHint(link.url)
+            val job = submitJob(baseUrl, apiKey, cleanMagnet) ?: return null
             val completed = waitForCompletion(baseUrl, apiKey, job, timeoutMs) ?: return null
-            buildStreamLink(completed)
+            buildStreamLink(completed, preferredFile)
         } catch (t: Throwable) {
             logError("failed to resolve ${link.url}", t)
             null
         }
+    }
+
+    /**
+     * Plugins may append a `cs_file=<index>` hint to a magnet to ask for a
+     * specific file of a multi-file release (e.g. one episode of a season
+     * pack). The hint is stripped before submission and used for file
+     * selection after the job completes.
+     */
+    private fun parseFileHint(magnet: String): Pair<String, Int?> {
+        val match = FILE_HINT_PATTERN.find(magnet) ?: return magnet to null
+        val clean = magnet.replace(match.value, "")
+        return clean.toPair(match.groupValues[1].toInt())
+    }
+
+    private fun String.toPair(index: Int): Pair<String, Int> {
+        var out = this
+        if (out.endsWith("&")) out = out.dropLast(1)
+        if (out.endsWith("?")) out = out.dropLast(1)
+        return out to index
     }
 
     private fun logError(message: String) {
@@ -189,8 +211,13 @@ object Torrin {
         }
     }
 
-    /** Builds a playable [ExtractorLink] from the stream URLs of a completed job. */
-    private suspend fun buildStreamLink(job: TorrinJob): ExtractorLink? {
+    /**
+     * Builds a playable [ExtractorLink] from the stream URLs of a completed
+     * job. When [preferredFile] names a file of the release it is streamed
+     * first (episode selection for multi-file torrents); otherwise the
+     * largest video-like file wins.
+     */
+    private suspend fun buildStreamLink(job: TorrinJob, preferredFile: Int?): ExtractorLink? {
         val streams = job.streamUrls.orEmpty()
             .filter { it.signedUrl.isNotBlank() }
         if (streams.isEmpty()) {
@@ -198,10 +225,18 @@ object Torrin {
             return null
         }
 
-        // Prefer the largest video-like file, otherwise fall back to the largest stream.
-        val best = streams
-            .filter { it.fileName.substringAfterLast('.').lowercase(Locale.ROOT) in VIDEO_EXTENSIONS }
-            .maxByOrNull { it.size }
+        val preferredName = preferredFile
+            ?.let { idx -> job.files.orEmpty().firstOrNull { it.index == idx }?.name }
+            ?.takeIf { it.isNotBlank() }
+        val preferred = preferredName
+            ?.let { name -> streams.firstOrNull { it.fileName.equals(name, ignoreCase = true) } }
+
+        // Otherwise prefer the largest video-like file, falling back to the
+        // largest stream.
+        val best = preferred
+            ?: streams
+                .filter { it.fileName.substringAfterLast('.').lowercase(Locale.ROOT) in VIDEO_EXTENSIONS }
+                .maxByOrNull { it.size }
             ?: streams.maxByOrNull { it.size }
             ?: streams.first()
 
