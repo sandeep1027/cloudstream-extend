@@ -384,6 +384,9 @@
     <string name="torbox_enabled_des">Resolve magnet links through your TorBox (torbox.app) subscription when Torrin is unavailable</string>
     <string name="torbox_api_key">TorBox API key</string>
     <string name="torbox_api_key_des">Your personal API key, found in your torbox.app account (Settings → API)</string>
+    <string name="pref_category_metadata">Metadata</string>
+    <string name="tmdb_api_key">TMDB API key</string>
+    <string name="tmdb_api_key_des">Your own TheMovieDB API key (themoviedb.org → Settings → API). Leave empty to use the built-in shared key</string>
     <string name="pref_category_player_layout">Layout</string>
     <string name="pref_category_defaults">Defaults</string>
     <string name="pref_category_looks">Looks</string>

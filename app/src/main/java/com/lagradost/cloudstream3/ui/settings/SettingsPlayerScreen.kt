@@ -113,6 +113,16 @@ object SettingsPlayerScreen : SearchableSettings {
                 ),
             ),
             Preference.PreferenceGroup(
+                title = stringResource(R.string.pref_category_metadata),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.tmdbApiKey,
+                        title = stringResource(R.string.tmdb_api_key),
+                        subtitle = stringResource(R.string.tmdb_api_key_des),
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
                 title = stringResource(R.string.pref_category_player_features),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.ListPreference(
