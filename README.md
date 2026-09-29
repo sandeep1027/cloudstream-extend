@@ -13,13 +13,14 @@
 + **Torrin debrid integration (app core):** magnet links from any extension are resolved through your [Torrin](https://torrin.app) account into direct, signed HTTPS streams (no local torrent engine needed). Settings → Player → Debrid.
 + **TorBox debrid integration (app core):** same flow for [TorBox](https://torbox.app). Falls back Torrin → TorBox → local torrent automatically.
 + **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer.
++ **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own key or leave blank to use the built-in shared key.
 
 ### Install the plugin
 
 Settings → Extensions → Add repository:
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/torrin-support/plugins/torrin/repo
 ```
 
 Then install **Torrin** from the repository and enable your debrid account(s) in Settings → Player → Debrid.
