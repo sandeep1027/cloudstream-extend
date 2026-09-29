@@ -57,6 +57,13 @@ data class TmdbLink(
  */
 var tmdbApiKeyOverride: String? = null
 
+/**
+ * User supplied MDBList API key, set by the app layer from user settings
+ * (Settings -> Player -> Metadata). Used by the Torrin MDBList extension for
+ * its latest-releases rows; blank means the feature is unavailable.
+ */
+var mdblistApiKeyOverride: String? = null
+
 open class TmdbProvider : MainAPI() {
     // This should always be false, but might as well make it easier for forks
     open val includeAdult = false

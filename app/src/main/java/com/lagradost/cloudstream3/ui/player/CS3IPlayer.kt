@@ -1897,20 +1897,45 @@ class CS3IPlayer : IPlayer {
                         )
                     )
 
-                    // When a debrid service (Torrin, then TorBox) is
-                    // configured, resolve the magnet through it first. This
-                    // intentionally happens before the local torrent consent
-                    // check below, since a debrid does not start a local
-                    // torrent session. Only when every debrid fails do we fall
-                    // back to the local torrent flow, including its consent
-                    // rules.
+                    // When a debrid service (Torrin / TorBox) is
+                    // configured, resolve the magnet through it first. A
+                    // link may carry a `cs_debrid` hint (emitted by
+                    // extensions that list one entry per debrid so the
+                    // user can choose); the hinted service is tried first
+                    // and the other enabled service is the fallback. This
+                    // intentionally happens before the local torrent
+                    // consent check below, since a debrid does not start a
+                    // local torrent session. Only when every debrid fails
+                    // do we fall back to the local torrent flow, including
+                    // its consent rules.
                     val torrinEnabled = Torrin.isEnabled(context)
                     val torboxEnabled = TorBox.isEnabled(context)
                     if (link.type == ExtractorLinkType.MAGNET && (torrinEnabled || torboxEnabled)) {
                         ioSafe {
-                            val debridLink =
-                                (if (torrinEnabled) Torrin.transformLink(context, link) else null)
-                                    ?: (if (torboxEnabled) TorBox.transformLink(context, link) else null)
+                            val debridHint = link.url
+                                .substringAfterLast("cs_debrid=", "")
+                                .substringBefore('&')
+                                .ifBlank { null }
+                                ?.lowercase()
+                            val attempts: List<Pair<String, suspend () -> ExtractorLink?>> = buildList {
+                                if (debridHint == "torbox" && torboxEnabled) {
+                                    add("TorBox" to { TorBox.transformLink(context, link) })
+                                }
+                                if (torrinEnabled) {
+                                    add("Torrin" to { Torrin.transformLink(context, link) })
+                                }
+                                if (debridHint != "torbox" && torboxEnabled) {
+                                    add("TorBox" to { TorBox.transformLink(context, link) })
+                                }
+                            }
+                            var debridLink: ExtractorLink? = null
+                            for ((name, transform) in attempts) {
+                                val result = transform()
+                                if (result != null) {
+                                    debridLink = result
+                                    break
+                                }
+                            }
                             if (exoPlayer == null) return@ioSafe
                             runOnMainThread {
                                 if (exoPlayer == null) return@runOnMainThread

@@ -120,6 +120,11 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.tmdb_api_key),
                         subtitle = stringResource(R.string.tmdb_api_key_des),
                     ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.mdblistApiKey,
+                        title = stringResource(R.string.mdblist_api_key),
+                        subtitle = stringResource(R.string.mdblist_api_key_des),
+                    ),
                 ),
             ),
             Preference.PreferenceGroup(

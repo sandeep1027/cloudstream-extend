@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo/TorrinTrakt.cs3",
+    "status": 1,
+    "version": "1",
+    "apiVersion": 1,
+    "name": "Torrin Trakt",
+    "internalName": "Torrin Trakt",
+    "authors": [
+      "rootx"
+    ],
+    "description": "Latest movies & this-week episodes from the public Trakt calendar (no API keys) plus curated trending rows. Streams via Torrin and TorBox debrid — pick the debrid per link.",
+    "repositoryUrl": null,
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "language": "en",
+    "iconUrl": null,
+    "fileSize": "56591",
+    "fileHash": "sha256-44f546db1453e3e821d05c40b0cdddb88e8fea57a648f44a90c9f027dd7d41a3"
+  }
+]

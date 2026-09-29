@@ -387,6 +387,8 @@
     <string name="pref_category_metadata">Metadata</string>
     <string name="tmdb_api_key">TMDB API key</string>
     <string name="tmdb_api_key_des">Your own TheMovieDB API key (themoviedb.org → Settings → API). Leave empty to use the built-in shared key</string>
+    <string name="mdblist_api_key">MDBList API key</string>
+    <string name="mdblist_api_key_des">Free key from mdblist.com (account → Preferences). Required for the Torrin MDBList extension latest-releases rows. Leave empty to disable them</string>
     <string name="pref_category_player_layout">Layout</string>
     <string name="pref_category_defaults">Defaults</string>
     <string name="pref_category_looks">Looks</string>

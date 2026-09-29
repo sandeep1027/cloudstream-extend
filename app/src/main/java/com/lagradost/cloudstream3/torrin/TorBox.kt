@@ -33,7 +33,10 @@ object TorBox {
 
     private const val POLL_INTERVAL_MS = 3_000L
 
-    private val FILE_HINT_PATTERN = Regex("[&?]cs_file=(\\d+)")
+    private val FILE_HINT_PATTERN = Regex("""[&?]cs_file=(\d+)""")
+    // Strips every client-side cs_* hint (cs_file, cs_debrid, ...) so only
+    // the raw magnet reaches the debrid API.
+    private val CS_HINT_PATTERN = Regex("""[&?]cs_[A-Za-z0-9]+=[^&]*""")
     private val INFO_HASH_PATTERN =
         Regex("urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})")
 
@@ -157,14 +160,16 @@ object TorBox {
     /**
      * Plugins may append a `cs_file=<index>` hint to a magnet to ask for a
      * specific file of a multi-file release (e.g. one episode of a season
-     * pack). The hint is stripped before submission and used for file
+     * pack). Client-side hints (`cs_file`, `cs_debrid`, ...) are all
+     * stripped before submission; the file index is kept for file
      * selection after the download completes.
      */
     private fun parseFileHint(magnet: String): Pair<String, Int?> {
-        val match = FILE_HINT_PATTERN.find(magnet) ?: return magnet to null
-        var clean = magnet.replace(match.value, "")
+        val match = FILE_HINT_PATTERN.find(magnet)
+        var clean = CS_HINT_PATTERN.replace(magnet, "")
         if (clean.endsWith("&")) clean = clean.dropLast(1)
         if (clean.endsWith("?")) clean = clean.dropLast(1)
+        if (match == null) return clean to null
         return clean to match.groupValues[1].toInt()
     }
 

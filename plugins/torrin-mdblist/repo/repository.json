@@ -1,0 +1,9 @@
+{
+  "iconUrl": null,
+  "name": "Torrin MDBList Extensions",
+  "description": "MDBList latest releases dashboard + Torrin/TorBox debrid playback for CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo/plugins.json"
+  ]
+}
