@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo/TorrinMdbList.cs3",
+    "status": 1,
+    "version": "1",
+    "apiVersion": 1,
+    "name": "Torrin MDBList",
+    "internalName": "Torrin MDBList",
+    "authors": [
+      "rootx"
+    ],
+    "description": "Latest movies & shows from the MDBList catalog (your free API key, Settings > Player > Metadata) plus curated trending rows. Streams via Torrin and TorBox debrid — pick the debrid per link.",
+    "repositoryUrl": null,
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "language": "en",
+    "iconUrl": null,
+    "fileSize": "54347",
+    "fileHash": "sha256-a3203aa21487ac384bf9c48e2db0f198e40a9ea549a2b703721891c92bee798c"
+  }
+]

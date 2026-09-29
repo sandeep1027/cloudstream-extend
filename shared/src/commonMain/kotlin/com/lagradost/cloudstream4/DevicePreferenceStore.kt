@@ -157,6 +157,12 @@ class ProviderPreferences(preferences: PreferenceStore) {
 
     /** User supplied TheMovieDB API key. Empty falls back to the built-in public key. */
     val tmdbApiKey = preferences.getString("tmdb_api_key", "")
+
+    /**
+     * User supplied MDBList API key (free, from mdblist.com preferences).
+     * Used by the Torrin MDBList extension for latest-releases rows.
+     */
+    val mdblistApiKey = preferences.getString("mdblist_api_key", "")
 }
 
 class PlayerPreferences(preferences: PreferenceStore) {
