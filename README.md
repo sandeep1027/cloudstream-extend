@@ -42,6 +42,8 @@ https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/p
 
 Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want.
 
+**One extra step:** the home screen only shows rows for ONE provider at a time. Tap the provider chip at the bottom of Home (it shows "None" by default) and pick the extension (e.g. "Torrin MDBList") — its rows then appear on Home.
+
 ### APK
 
 Prebuilt APKs are available on the [Releases page](https://github.com/sandeep1027/cloudstream-extend/releases).
