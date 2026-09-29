@@ -1,9 +1,6 @@
 package com.torrin.mdblist
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /** IMDB public suggestion API — https://v2.sg.media-imdb.com/suggestion/{letter}/{query}.json */
 @Serializable
@@ -95,13 +92,17 @@ data class TmdbExternalIdsResponse(
 /**
  * MDBList — https://mdblist.com (user supplied free API key).
  *
- * `GET /catalog/movie|show?apikey=***&sort=released&sort_order=desc&append_to_response=poster,description`
+ * `GET /catalog/movie|show?apikey=***&sort=released&sort_order=desc&released_to=<today>
+ * &limit=N&append_to_response=poster,description`
  *
- * The item schema is not fully pinned in the public docs, so every field is
- * optional and parsed defensively. Cross-reference ids arrive under
- * `sources` — e.g. `sources.imdb.imdbId` — and may occasionally come back as
- * a bare string, so `sources` is kept as a raw [JsonElement] and ids are
- * extracted with [imdbIdOf] / [tmdbIdOf].
+ * Response is wrapped: `{"movies": [...], "pagination": {...}, "quota": {...}}`
+ * for the movie endpoint, `{"shows": [...]}` for the show endpoint.
+ * `released_to=<today>` is required: without it, `sort=released desc` puts
+ * *planned* titles (future release dates) first.
+ *
+ * Schema (verified 2026-09-29): item has top-level `imdb_id` plus an `ids`
+ * object `{mdblist, imdb, tmdb, tvdb}`; `poster` is a TMDB url or null;
+ * `status` is e.g. "released" / "Returning Series".
  */
 @Serializable
 data class MdblistCatalog(
@@ -110,35 +111,32 @@ data class MdblistCatalog(
 )
 
 @Serializable
-data class MdblistItem(
-    val title: String? = null,
-    val year: Int? = null,
-    val released: String? = null,
-    val poster: String? = null,
-    val description: String? = null,
-    val sources: JsonElement? = null
+data class MdblistIds(
+    val mdblist: String? = null,
+    val imdb: String? = null,
+    val tmdb: Long? = null,
+    val tvdb: Long? = null
 )
 
-/**
- * Extracts the IMDb id (tt...) from a catalog item's raw `sources` element.
- * Handles both `{"imdb": {"imdbId": "tt..."}}` and `{"imdb": "tt..."}`.
- */
-fun imdbIdOf(item: MdblistItem): String? {
-    val imdb = (item.sources as? JsonObject)?.get("imdb") ?: return null
-    val id = when (imdb) {
-        is JsonPrimitive -> if (imdb.isString) imdb.content else null
-        is JsonObject -> (imdb["imdbId"] as? JsonPrimitive)?.content
-        else -> null
-    }
-    return id?.takeIf { it.startsWith("tt") }
-}
-
-/** Extracts the TMDB id from a catalog item's raw `sources` element, if present. */
-fun tmdbIdOf(item: MdblistItem): Int? {
-    val tmdb = (item.sources as? JsonObject)?.get("tmdb") ?: return null
-    return when (tmdb) {
-        is JsonPrimitive -> tmdb.content.toIntOrNull()
-        is JsonObject -> (tmdb["tmdbId"] as? JsonPrimitive)?.content?.toIntOrNull()
-        else -> null
-    }
+@Serializable
+data class MdblistItem(
+    val id: Long? = null,
+    val mediatype: String? = null,
+    val imdb_id: String? = null,
+    val tvdb_id: Long? = null,
+    val ids: MdblistIds? = null,
+    val title: String? = null,
+    val language: String? = null,
+    val country: String? = null,
+    val release_year: Int? = null,
+    val release_date: String? = null,
+    val status: String? = null,
+    val runtime: Int? = null,
+    val added_at: String? = null,
+    val poster: String? = null,
+    val description: String? = null
+) {
+    /** IMDb id (tt...): top-level `imdb_id` first, `ids.imdb` as fallback. */
+    val imdbId: String?
+        get() = (imdb_id?.takeIf { it.startsWith("tt") } ?: ids?.imdb?.takeIf { it.startsWith("tt") })
 }

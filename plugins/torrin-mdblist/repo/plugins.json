@@ -9,7 +9,7 @@
     "authors": [
       "rootx"
     ],
-    "description": "Latest movies & shows from the MDBList catalog (your free API key, Settings > Player > Metadata) plus curated trending rows. Streams via Torrin and TorBox debrid — pick the debrid per link.",
+    "description": "Latest movies & shows from the MDBList catalog (your free API key, Settings > Player > Metadata) plus curated trending rows. Streams via Torrin and TorBox debrid \u2014 pick the debrid per link.",
     "repositoryUrl": null,
     "tvTypes": [
       "Movie",
@@ -17,7 +17,7 @@
     ],
     "language": "en",
     "iconUrl": null,
-    "fileSize": "54347",
-    "fileHash": "sha256-a3203aa21487ac384bf9c48e2db0f198e40a9ea549a2b703721891c92bee798c"
+    "fileSize": "58785",
+    "fileHash": "sha256-cb4bb3892e6541880758a1cdf7f40023993adb41b29b3cd89afede60a7b9ae10"
   }
 ]

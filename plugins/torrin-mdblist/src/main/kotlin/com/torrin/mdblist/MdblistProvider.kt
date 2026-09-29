@@ -122,30 +122,49 @@ class MdblistProvider : MainAPI() {
                 fresh.second[key].orEmpty()
             } else {
                 val rows = buildMdblistRows(apiKey)
-                // An empty result is most likely a transient API hiccup (or a
-                // bad key): cache it for only a short time so it self-heals.
-                val ttl = if (rows.values.all { it.isEmpty() }) CACHE_TTL_EMPTY else CACHE_TTL
-                mdblistCache = Pair(System.currentTimeMillis() + ttl, rows)
-                rows[key].orEmpty()
+                if (rows == null) {
+                    // Request failed. Keep the previous (possibly stale) data
+                    // so the rows don't vanish on a transient error or quota
+                    // blip; extend its expiry for one more window.
+                    val previous = fresh
+                    if (previous != null) {
+                        mdblistCache = Pair(System.currentTimeMillis() + CACHE_TTL, previous.second)
+                    } else {
+                        mdblistCache = Pair(System.currentTimeMillis() + CACHE_TTL_EMPTY, emptyMap())
+                    }
+                    previous?.second?.get(key).orEmpty()
+                } else {
+                    // An empty result is most likely a transient API hiccup (or
+                    // a bad key): cache it for only a short time so it self-heals.
+                    val ttl = if (rows.values.all { it.isEmpty() }) CACHE_TTL_EMPTY else CACHE_TTL
+                    mdblistCache = Pair(System.currentTimeMillis() + ttl, rows)
+                    rows[key].orEmpty()
+                }
             }
         }
     }
 
-    private suspend fun buildMdblistRows(apiKey: String): Map<String, List<LatestItem>> {
-        val movies = fetchMdblistCatalog("movie", apiKey)
+    /**
+     * Returns null when the catalog requests failed outright (network/HTTP),
+     * an (empty) map otherwise.
+     */
+    private suspend fun buildMdblistRows(apiKey : String) : Map<String, List<LatestItem>>? {
+        val moviesRaw = fetchMdblistCatalog("movie", apiKey) ?: return null
+        val showsRaw = fetchMdblistCatalog("show", apiKey) ?: return null
+        val movies = moviesRaw
             .mapNotNull { item ->
                 val title = item.title?.trim().orEmpty()
-                val imdbId = imdbIdOf(item) ?: return@mapNotNull null
+                val imdbId = item.imdbId ?: return@mapNotNull null
                 if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "movie", title, item.year, item.poster)
+                LatestItem(imdbId, "movie", title, item.release_year, item.poster)
             }
             .take(MAX_ROW_SIZE)
-        val shows = fetchMdblistCatalog("show", apiKey)
+        val shows = showsRaw
             .mapNotNull { item ->
                 val title = item.title?.trim().orEmpty()
-                val imdbId = imdbIdOf(item) ?: return@mapNotNull null
+                val imdbId = item.imdbId ?: return@mapNotNull null
                 if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "tv", title, item.year, item.poster)
+                LatestItem(imdbId, "tv", title, item.release_year, item.poster)
             }
             .take(MAX_ROW_SIZE)
         return mapOf(
@@ -154,18 +173,25 @@ class MdblistProvider : MainAPI() {
         )
     }
 
-    private suspend fun fetchMdblistCatalog(kind: String, apiKey: String): List<MdblistItem> {
+    /**
+     * One MDBList catalog page, newest actually-released titles first.
+     *
+     * `released_to=<today (UTC)>` is essential: without it `sort=released
+     * desc` lists *planned* titles (future release dates) first.
+     *
+     * Returns null on network/HTTP/parse failure, an (empty) list on success.
+     */
+    private suspend fun fetchMdblistCatalog(kind : String, apiKey : String) : List<MdblistItem>? {
+        val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
         val url = "$MDBLIST_BASE/catalog/$kind?apikey=${URLEncoder.encode(apiKey, "UTF-8")}" +
-            "&sort=released&sort_order=desc&limit=$MAX_ROW_SIZE" +
+            "&sort=released&sort_order=desc&released_to=$today&limit=$MAX_ROW_SIZE" +
             "&append_to_response=poster,description"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
-        if (response == null || !response.isSuccessful) return emptyList()
-        val items = if (kind == "show") {
-            runCatching { AppUtils.parseJson<MdblistCatalog>(response.text) }.getOrNull()?.shows
-        } else {
-            runCatching { AppUtils.parseJson<MdblistCatalog>(response.text) }.getOrNull()?.movies
-        }
-        return items.orEmpty()
+            ?: return null
+        if (!response.isSuccessful) return null
+        val catalog = runCatching { AppUtils.parseJson<MdblistCatalog>(response.text) }.getOrNull()
+            ?: return null
+        return if (kind == "show") catalog.shows else catalog.movies
     }
 
     /** MDBList-sourced dashboard card -> content url. */
