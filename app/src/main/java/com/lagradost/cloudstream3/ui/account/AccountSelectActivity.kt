@@ -1,10 +1,12 @@
 package com.lagradost.cloudstream3.ui.account
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.GridLayoutManager
 import com.lagradost.cloudstream3.CommonActivity
@@ -47,6 +49,28 @@ class AccountSelectActivity : FragmentActivity(), BiometricCallback {
     @SuppressLint("NotifyDataSetChanged")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Show legal disclaimer on first launch. The dialog blocks further
+        // setup until the user explicitly accepts; declining exits the app.
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val disclaimerKey = getString(R.string.legal_disclaimer_accepted_key)
+        if (!prefs.getBoolean(disclaimerKey, false)) {
+            val builder = AlertDialog.Builder(this, R.style.AlertDialogCustom)
+            builder.setTitle(R.string.disclaimer_title)
+            builder.setMessage(R.string.legal_notice_text)
+            builder.setCancelable(false)
+            builder.setPositiveButton(R.string.disclaimer_accept) { _, _ ->
+                prefs.edit().putBoolean(disclaimerKey, true).apply()
+                // Re-create so the rest of onCreate runs with the flag set
+                recreate()
+            }
+            builder.setNegativeButton(R.string.disclaimer_exit) { _, _ ->
+                finishAffinity()
+            }
+            builder.show()
+            // Do not continue setup until the user decides
+            return
+        }
 
         // Are we editing and coming from MainActivity?
         val isEditingFromMainActivity = intent.getBooleanExtra(

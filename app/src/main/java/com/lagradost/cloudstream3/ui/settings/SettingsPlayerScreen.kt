@@ -511,6 +511,84 @@ object SettingsPlayerScreen : SearchableSettings {
                 )
             ),
 
+            Preference.PreferenceGroup(
+                title = "Downloads",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.downloadEnabled,
+                        title = "Enable Downloads",
+                        subtitle = "Allow downloading content for offline viewing",
+                        icon = painterResource(R.drawable.ic_download),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.downloadOverWifiOnly,
+                        title = "Download over WiFi only",
+                        subtitle = "Only download when connected to WiFi",
+                        icon = painterResource(R.drawable.wifi_24px),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.downloads.maxConcurrentDownloads,
+                        title = "Max Concurrent Downloads",
+                        subtitle = "Number of downloads at the same time",
+                        icon = painterResource(R.drawable.download_24px),
+                        entries = mapOf(1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5"),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.autoDeleteAfterWatch,
+                        title = "Auto-delete after watching",
+                        subtitle = "Automatically delete downloads after you've watched them",
+                        icon = painterResource(R.drawable.ic_baseline_delete_outline_24),
+                    ),
+                )
+            ),
+
+            Preference.PreferenceGroup(
+                title = "Subtitles",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.subtitles.autoDownloadSubtitles,
+                        title = "Auto-download subtitles",
+                        subtitle = "Automatically download subtitles for downloaded content",
+                        icon = painterResource(R.drawable.subtitles_24px),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.subtitles.subtitleLanguage,
+                        title = "Subtitle language",
+                        subtitle = "Preferred language for subtitles",
+                        icon = painterResource(R.drawable.ic_baseline_language_24),
+                        entries = mapOf(
+                            "en" to "English",
+                            "hi" to "Hindi",
+                            "ta" to "Tamil",
+                            "te" to "Telugu",
+                            "ml" to "Malayalam",
+                            "kn" to "Kannada",
+                            "mr" to "Marathi",
+                            "gu" to "Gujarati",
+                            "bn" to "Bengali",
+                            "pa" to "Punjabi",
+                            "ur" to "Urdu",
+                            "es" to "Spanish",
+                            "fr" to "French",
+                            "de" to "German",
+                            "it" to "Italian",
+                            "pt" to "Portuguese",
+                            "ru" to "Russian",
+                            "ja" to "Japanese",
+                            "ko" to "Korean",
+                            "zh" to "Chinese",
+                        ),
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.subtitles.subtitleSize,
+                        title = "Subtitle size",
+                        subtitle = "Adjust subtitle text size",
+                        icon = painterResource(R.drawable.format_size_24px),
+                        valueRange = 12..32,
+                    ),
+                )
+            ),
+
             )
     }
 }

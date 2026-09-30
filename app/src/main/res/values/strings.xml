@@ -819,4 +819,8 @@
         <item quantity="other">%d downloads queued</item>
     </plurals>
     <string name="player_is_live">Live</string>
+    <string name="disclaimer_accept">I Accept</string>
+    <string name="disclaimer_exit">Exit</string>
+    <string name="disclaimer_title">Important — Please Read</string>
+    <string name="disclaimer_must_accept">You must accept the disclaimer to use this app.</string>
 </resources>

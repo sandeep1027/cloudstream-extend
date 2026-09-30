@@ -32,6 +32,8 @@ class AppSettings internal constructor(
     val backup = BackupPreferences(preferences)
     val plugins = PluginPreferences(preferences)
     val debrid = DebridPreferences(preferences)
+    val downloads = DownloadPreferences(preferences)
+    val subtitles = SubtitlePreferences(preferences)
 }
 
 class PluginPreferences(preferences: PreferenceStore) {
@@ -267,4 +269,31 @@ class DebridPreferences(preferences: PreferenceStore) {
     val realDebridTimeoutSeconds = preferences.getInt(KEY_REALDEBRID_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
 
     val debridDebugEnabled = preferences.getBoolean(KEY_DEBUG_ENABLED, false)
+}
+
+/**
+ * Download manager preferences
+ */
+class DownloadPreferences(preferences: PreferenceStore) {
+    val downloadEnabled = preferences.getBoolean("download_enabled_key", true)
+    val downloadOverWifiOnly = preferences.getBoolean("download_wifi_only_key", false)
+    val maxConcurrentDownloads = preferences.getInt("max_concurrent_downloads_key", 2)
+    val autoDeleteAfterWatch = preferences.getBoolean("auto_delete_after_watch_key", false)
+    val downloadQuality = preferences.getString("download_quality_key", "best")
+    val downloadPath = preferences.getString("download_path_key", "")
+}
+
+/**
+ * Subtitle preferences
+ */
+class SubtitlePreferences(preferences: PreferenceStore) {
+    val autoDownloadSubtitles = preferences.getBoolean("auto_download_subtitles_key", true)
+    val subtitleLanguage = preferences.getString("subtitle_language_key", "en")
+    val subtitleSize = preferences.getInt("subtitle_size_key", 16)
+    val subtitleColor = preferences.getInt("subtitle_color_key", -1) // -1 = white
+    val subtitleBackgroundColor = preferences.getInt("subtitle_bg_color_key", 0x80000000.toInt())
+    val subtitleOutlineColor = preferences.getInt("subtitle_outline_color_key", -16777216) // black
+    val subtitleOutlineWidth = preferences.getInt("subtitle_outline_width_key", 2)
+    val subtitleFont = preferences.getString("subtitle_font_key", "default")
+    val subtitleSyncOffset = preferences.getInt("subtitle_sync_offset_key", 0) // in milliseconds
 }

@@ -41,7 +41,7 @@
         android:nextFocusDown="@id/plugin_storage_appbar"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        app:layout_constraintBottom_toTopOf="@id/download_storage_appbar"
+        app:layout_constraintBottom_toTopOf="@id/plugin_storage_appbar"
         app:layout_constraintTop_toTopOf="parent"
         tools:listitem="@layout/repository_item"
         tools:visibility="visible" />

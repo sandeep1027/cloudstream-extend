@@ -458,7 +458,8 @@ class TorrinProvider : MainAPI() {
 
     private suspend fun fetchTmdbFind(tt: String): TmdbFindResponse? {
         // Maps an IMDb id to a TMDB id (+ cast). external_source=imdb_id.
-        val url = "$TMDB_BASE/find/$tt?api_key=$TMDB_API_KEY&external_source=imdb_id"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/find/$tt?api_key=$key&external_source=imdb_id"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbFindResponse>(response.text) }.getOrNull()
@@ -466,7 +467,8 @@ class TorrinProvider : MainAPI() {
 
     private suspend fun fetchTmdbMedia(kind: String, id: Int): TmdbMedia? {
         // kind = "movie" | "tv". Returns overview, poster_path, release date.
-        val url = "$TMDB_BASE/$kind/$id?api_key=$TMDB_API_KEY"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id?api_key=$key"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbMedia>(response.text) }.getOrNull()
@@ -474,8 +476,9 @@ class TorrinProvider : MainAPI() {
 
     /** Latest releases, date desc (region IN, minimum vote count). */
     private suspend fun fetchTmdbDiscover(kind: String, page: Int): TmdbDiscoverResponse {
+        val key = TMDB_API_KEY ?: return TmdbDiscoverResponse()
         val dateField = if (kind == "tv") "first_air_date" else "primary_release_date"
-        val url = "$TMDB_BASE/discover/$kind?api_key=$TMDB_API_KEY" +
+        val url = "$TMDB_BASE/discover/$kind?api_key=$key" +
             "&language=en-US&region=IN&with_origin_country=IN&sort_by=$dateField.desc" +
             "&vote_count.gte=10&page=$page"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
@@ -488,7 +491,8 @@ class TorrinProvider : MainAPI() {
 
     /** Which platforms carry a title in India (flatrate + free). */
     private suspend fun fetchTmdbWatchProviders(kind: String, id: Int): TmdbWatchProvidersResponse? {
-        val url = "$TMDB_BASE/$kind/$id/watch/providers?api_key=$TMDB_API_KEY&watch_region=IN"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id/watch/providers?api_key=$key&watch_region=IN"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbWatchProvidersResponse>(response.text) }.getOrNull()
@@ -496,7 +500,8 @@ class TorrinProvider : MainAPI() {
 
     /** TMDB id -> IMDb id (tt...). */
     private suspend fun fetchTmdbImdbId(kind: String, id: Int): String? {
-        val url = "$TMDB_BASE/$kind/$id/external_ids?api_key=$TMDB_API_KEY"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id/external_ids?api_key=$key"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbExternalIdsResponse>(response.text) }.getOrNull()
@@ -725,12 +730,12 @@ class TorrinProvider : MainAPI() {
         const val IMDB_SUGGEST = "https://v2.sg.media-imdb.com/suggestion/%s/%s.json"
         const val TORRENTIO_STREAM = "https://torrentio.strem.fun/stream/%s/%s.json"
 
-        // TMDB — metadata (plot/poster/year) source. Resolves IMDb ids and
-        // fetches overview + poster. Uses the user supplied key from settings
-        // (Settings -> Player -> Metadata) when present, else the built-in key.
-        const val DEFAULT_TMDB_API_KEY = "9f80b1a1a0112b04448d986f35313bbc"
-        val TMDB_API_KEY: String
-            get() = tmdbApiKeyOverride ?: DEFAULT_TMDB_API_KEY
+        // TMDB — metadata (plot/poster/year) source. Requires the user to
+        // supply their own key in Settings -> Player -> Metadata. Without a
+        // key all TMDB fetches return null and the plugin gracefully skips
+        // metadata enrichment.
+        val TMDB_API_KEY: String?
+            get() = tmdbApiKeyOverride?.takeIf { it.isNotBlank() }
         const val TMDB_BASE = "https://api.themoviedb.org/3"
         const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
