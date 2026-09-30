@@ -28,6 +28,7 @@ import com.lagradost.cloudstream3.APIHolder.allProviders
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.openBrowser
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.SearchResponse
@@ -469,8 +470,7 @@ class LibraryFragment : BaseFragment<FragmentLibraryBinding>(
 
                 is Resource.Failure -> {
                     stopLoading.run()
-                    // No user indication it failed :(
-                    // TODO
+                    activity?.let { CommonActivity.showToast(it, R.string.reload_error) }
                 }
             }
         }

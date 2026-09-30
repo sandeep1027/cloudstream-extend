@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.utils.trakt
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.lagradost.cloudstream3.syncproviders.AccountManager
@@ -9,7 +10,10 @@ import com.lagradost.cloudstream3.syncproviders.providers.TraktApi
 import com.lagradost.cloudstream3.syncproviders.providers.TraktApi.ScrobbleBody
 import com.lagradost.cloudstream3.syncproviders.providers.TraktApi.ScrobbleIds
 import com.lagradost.cloudstream3.syncproviders.providers.TraktApi.ScrobbleMedia
+import com.lagradost.cloudstream3.CommonActivity
+import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
+import com.lagradost.cloudstream3.utils.Coroutines.main
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -44,6 +48,7 @@ object TraktScrobbleManager {
     private const val WATCHED_THRESHOLD = 80.0
 
     // Current session state
+    private var appActivity: Activity? = null
     private var currentSyncData: HashMap<String, String>? = null
     private var currentMedia: ScrobbleMedia? = null
     private var isEpisode: Boolean = false
@@ -86,6 +91,7 @@ object TraktScrobbleManager {
         if (!traktApi.isConfigured()) return
         if (currentAuth() == null) return
 
+        appActivity = context as? Activity
         currentSyncData = syncData
         isEpisode = episodeMode
         lastProgress = 0.0
@@ -164,6 +170,7 @@ object TraktScrobbleManager {
     }
 
     private fun reset() {
+        appActivity = null
         currentSyncData = null
         currentMedia = null
         isEpisode = false
@@ -185,6 +192,11 @@ object TraktScrobbleManager {
         ioSafe {
             val ok = traktApi.scrobble(auth, action, body)
             Log.d(TAG, "scrobble/$action progress=${"%.1f".format(progress)}% ok=$ok")
+            if (!ok) {
+                main {
+                    appActivity?.let { CommonActivity.showToast(it, R.string.trakt_scrobble_failed) }
+                }
+            }
         }
     }
 
