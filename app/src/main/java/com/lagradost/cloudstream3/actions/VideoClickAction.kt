@@ -22,6 +22,8 @@ import com.lagradost.cloudstream3.actions.temp.MpvKtPreviewPackage
 import com.lagradost.cloudstream3.actions.temp.MpvPackage
 import com.lagradost.cloudstream3.actions.temp.MpvRxPackage
 import com.lagradost.cloudstream3.actions.temp.MpvYTDLPackage
+import com.lagradost.cloudstream3.actions.temp.MXPlayerPackage
+import com.lagradost.cloudstream3.actions.temp.MXPlayerProPackage
 import com.lagradost.cloudstream3.actions.temp.NextPlayerPackage
 import com.lagradost.cloudstream3.actions.temp.OnlyPlayer
 import com.lagradost.cloudstream3.actions.temp.PlayInBrowserAction
@@ -56,6 +58,8 @@ object VideoClickActionHolder {
         MpvExPackage(),
         NextPlayerPackage(),
         JustPlayerPackage(),
+        MXPlayerPackage(),
+        MXPlayerProPackage(),
         FcastAction(),
         LibreTorrentPackage(),
         BiglyBTPackage(),

@@ -136,6 +136,17 @@ class UIPreferences(preferences: PreferenceStore) {
     val filterQuality = preferences.getEnumSet<SearchQuality>(
         "pref_filter_search_quality_key2", emptySet()
     )
+
+    /** Minimum release year shown in search results; null means no lower bound.
+     *  Stored as the raw int; -1 is the sentinel for "unset". */
+    val searchFilterYearMin = preferences.getInt("pref_search_filter_year_min", -1)
+
+    /** Maximum release year shown in search results; null means no upper bound.
+     *  Stored as the raw int; -1 is the sentinel for "unset". */
+    val searchFilterYearMax = preferences.getInt("pref_search_filter_year_max", -1)
+
+    /** Sort mode used for search results. Stored as the enum name. */
+    val searchFilterSortMode = preferences.getString("pref_search_filter_sort_mode", "DEFAULT")
 }
 
 class ProviderPreferences(preferences: PreferenceStore) {

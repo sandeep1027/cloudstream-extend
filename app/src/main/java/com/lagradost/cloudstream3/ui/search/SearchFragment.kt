@@ -27,6 +27,7 @@ import androidx.core.view.doOnLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
 import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
 import com.lagradost.cloudstream3.AllLanguagesName
 import com.lagradost.cloudstream3.AnimeSearchResponse
@@ -38,10 +39,11 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainActivity
 import com.lagradost.cloudstream3.MainActivity.Companion.afterPluginsLoadedEvent
 import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.SearchQuality
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.databinding.FragmentSearchBinding
-import com.lagradost.cloudstream3.databinding.HomeSelectMainpageBinding
+import com.lagradost.cloudstream3.databinding.SearchFilterSheetBinding
 import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.observe
@@ -64,7 +66,6 @@ import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLandscape
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.filterProviderByPreferredMedia
-import com.lagradost.cloudstream3.utils.AppContextUtils.filterSearchResultByFilmQuality
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiProviderLangSettings
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiSettings
 import com.lagradost.cloudstream3.utils.AppContextUtils.ownHide
@@ -81,8 +82,8 @@ import com.lagradost.cloudstream3.utils.UIHelper.dismissSafe
 import com.lagradost.cloudstream3.utils.UIHelper.fixSystemBarsPadding
 import com.lagradost.cloudstream3.utils.UIHelper.getSpanCount
 import com.lagradost.cloudstream3.utils.UIHelper.hideKeyboard
+import com.lagradost.cloudstream4.AppSettings
 import java.util.Locale
-import java.util.concurrent.locks.ReentrantLock
 
 class SearchFragment : BaseFragment<FragmentSearchBinding>(
     BaseFragment.BindingCreator.Bind(FragmentSearchBinding::bind)
@@ -151,6 +152,9 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         super.onResume()
         searchViewModel.clearSuggestions()
         afterPluginsLoadedEvent += ::reloadRepos
+        // Restore persisted filter state so results stay consistent across onResume.
+        currentSearchFilter = loadPersistedFilter()
+        refreshDisplayedResults()
     }
 
     override fun onStop() {
@@ -160,6 +164,55 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
     var selectedSearchTypes = mutableListOf<TvType>()
     var selectedApis = mutableSetOf<String>()
+
+    /** Currently-applied advanced search filters (quality exclusion, year range, sort). */
+    var currentSearchFilter: SearchFilter = SearchFilter()
+        private set
+
+    /** Read the persisted filter state from [AppSettings]. */
+    private fun loadPersistedFilter(): SearchFilter {
+        val ctx = context ?: return SearchFilter()
+        val prefs = AppSettings(ctx).ui
+        val excluded = prefs.filterQuality.get()
+        val yearMin = prefs.searchFilterYearMin.get()
+        val yearMax = prefs.searchFilterYearMax.get()
+        val sortMode = try {
+            SearchSortMode.valueOf(prefs.searchFilterSortMode.get())
+        } catch (_: IllegalArgumentException) {
+            SearchSortMode.DEFAULT
+        }
+        return SearchFilter(
+            excludedQualities = excluded,
+            yearMin = yearMin.takeIf { it > 0 },
+            yearMax = yearMax.takeIf { it > 0 },
+            sortMode = sortMode,
+        )
+    }
+
+    /**
+     * Re-apply the current filter to whatever the ViewModel has already loaded.
+     * Used when the filter sheet is dismissed without changing providers/types
+     * (so we don't re-hit the network) and when the fragment is resumed.
+     */
+    private fun refreshDisplayedResults() {
+        val b = binding ?: return
+        val ctx = context ?: return
+
+        // Advanced-search (per-provider) list
+        val current = searchViewModel.currentSearch.value
+        if (current != null) {
+            renderAdvancedSearch(ctx, current)
+        }
+
+        // Flat (non-advanced) list
+        val flat = searchViewModel.searchResponse.value
+        if (flat is Resource.Success) {
+            val filteredList = flat.value.list
+                .filterSearchResponse()
+                .applySearchFilter(currentSearchFilter)
+            (b.searchAutofitResults.adapter as? SearchAdapter)?.submitList(filteredList)
+        }
+    }
 
     /**
      * Will filter all providers by preferred media and selectedSearchTypes.
@@ -236,6 +289,8 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         binding: FragmentSearchBinding,
         savedInstanceState: Bundle?
     ) {
+        currentSearchFilter = loadPersistedFilter()
+
         reloadRepos()
         binding.apply {
             val adapter =
@@ -290,22 +345,28 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 val currentSelectedApis = if (selectedApis.isEmpty()) validAPIs.map { it.name }
                     .toMutableSet() else selectedApis
 
-                val builder =
-                    BottomSheetDialog(ctx)
-
+                val builder = BottomSheetDialog(ctx)
                 builder.behavior.state = BottomSheetBehavior.STATE_EXPANDED
 
-                val selectMainpageBinding: HomeSelectMainpageBinding =
-                    HomeSelectMainpageBinding.inflate(
-                        builder.layoutInflater,
-                        null,
-                        false
-                    )
-                builder.setContentView(selectMainpageBinding.root)
+                val sheetBinding: SearchFilterSheetBinding =
+                    SearchFilterSheetBinding.inflate(builder.layoutInflater, null, false)
+                builder.setContentView(sheetBinding.root)
                 builder.show()
                 builder.let { dialog ->
                     val previousSelectedApis = selectedApis.toSet()
                     val previousSelectedSearchTypes = selectedSearchTypes.toSet()
+
+                    // Snapshot the current filter so Cancel can roll back.
+                    val appSettings = AppSettings(ctx)
+                    var tempExcludedQualities =
+                        appSettings.ui.filterQuality.get().toMutableSet()
+                    var tempYearMin = appSettings.ui.searchFilterYearMin.get()
+                    var tempYearMax = appSettings.ui.searchFilterYearMax.get()
+                    var tempSortMode = try {
+                        SearchSortMode.valueOf(appSettings.ui.searchFilterSortMode.get())
+                    } catch (_: IllegalArgumentException) {
+                        SearchSortMode.DEFAULT
+                    }
 
                     val isMultiLang = ctx.getApiProviderLangSettings().let { set ->
                         set.size > 1 || set.contains(AllLanguagesName)
@@ -313,9 +374,14 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
                     val cancelBtt = dialog.findViewById<MaterialButton>(R.id.cancel_btt)
                     val applyBtt = dialog.findViewById<MaterialButton>(R.id.apply_btt)
+                    val resetBtt = dialog.findViewById<MaterialButton>(R.id.reset_btt)
+                    val sortButton = dialog.findViewById<MaterialButton>(R.id.sort_button)
+                    val yearMinEdit = sheetBinding.yearMin
+                    val yearMaxEdit = sheetBinding.yearMax
 
                     val listView = dialog.findViewById<ListView>(R.id.listview1)
-                    val arrayAdapter = ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
+                    val arrayAdapter =
+                        ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
                     listView?.adapter = arrayAdapter
                     listView?.choiceMode = AbsListView.CHOICE_MODE_MULTIPLE
 
@@ -337,29 +403,24 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
                         arrayAdapter.clear()
                         currentValidApis = validAPIs.filter { api ->
-                            api.supportedTypes.any {
-                                types.contains(it)
-                            }
+                            api.supportedTypes.any { types.contains(it) }
                         }.sortedBy { it.name.lowercase() }
 
                         val names = currentValidApis.map {
                             if (isMultiLang) "${
-                                SubtitleHelper.getFlagFromIso(
-                                    it.lang
-                                )?.plus(" ") ?: ""
+                                SubtitleHelper.getFlagFromIso(it.lang)?.plus(" ") ?: ""
                             }${it.name}" else it.name
                         }
                         for ((index, api) in currentValidApis.map { it.name }.withIndex()) {
                             listView?.setItemChecked(index, currentSelectedApis.contains(api))
                         }
 
-                        //arrayAdapter.notifyDataSetChanged()
                         arrayAdapter.addAll(names)
                         arrayAdapter.notifyDataSetChanged()
                     }
 
                     bindChips(
-                        selectMainpageBinding.tvtypesChipsScroll.tvtypesChips,
+                        sheetBinding.tvtypesChipsScroll.tvtypesChips,
                         selectedSearchTypes,
                         validAPIs.flatMap { api -> api.supportedTypes }.distinct()
                     ) { list ->
@@ -373,13 +434,75 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                                 binding.tvtypesChipsScroll.tvtypesChips,
                                 selectedSearchTypes
                             )
-
                         }
                     }
 
+                    // ----- Quality chips -----
+                    val qualityGroup = sheetBinding.qualityChips
+                    qualityGroup.removeAllViews()
+                    for (q in SearchQuality.entries) {
+                        val chip = Chip(ctx).apply {
+                            text = ctx.getString(q.toStringRes())
+                            isCheckable = true
+                            isChecked = tempExcludedQualities.contains(q)
+                            setOnCheckedChangeListener { _, checked ->
+                                if (checked) tempExcludedQualities.add(q)
+                                else tempExcludedQualities.remove(q)
+                            }
+                        }
+                        qualityGroup.addView(chip)
+                    }
 
-                    cancelBtt?.setOnClickListener {
-                        dialog.dismissSafe()
+                    // ----- Year fields -----
+                    if (tempYearMin > 0) yearMinEdit.setText(tempYearMin.toString())
+                    if (tempYearMax > 0) yearMaxEdit.setText(tempYearMax.toString())
+
+                    // ----- Sort button -----
+                    fun sortModeLabel(mode: SearchSortMode): String = when (mode) {
+                        SearchSortMode.DEFAULT -> ctx.getString(R.string.sort_default)
+                        SearchSortMode.NAME_ASC -> ctx.getString(R.string.sort_alphabetical_a)
+                        SearchSortMode.NAME_DESC -> ctx.getString(R.string.sort_alphabetical_z)
+                        SearchSortMode.YEAR_DESC -> ctx.getString(R.string.sort_release_date_new)
+                        SearchSortMode.YEAR_ASC -> ctx.getString(R.string.sort_release_date_old)
+                        SearchSortMode.RATING_DESC -> ctx.getString(R.string.sort_rating_desc)
+                        SearchSortMode.RATING_ASC -> ctx.getString(R.string.sort_rating_asc)
+                    }
+
+                    fun updateSortLabel() {
+                        sortButton?.text = sortModeLabel(tempSortMode)
+                    }
+                    updateSortLabel()
+
+                    sortButton?.setOnClickListener {
+                        val modes = SearchSortMode.entries.toTypedArray()
+                        val labels = modes.map { sortModeLabel(it) }.toTypedArray()
+                        val checkedItem = modes.indexOf(tempSortMode)
+
+                        AlertDialog.Builder(ctx)
+                            .setTitle(R.string.search_filter_sort_label)
+                            .setSingleChoiceItems(labels, checkedItem) { d, which ->
+                                tempSortMode = modes[which]
+                                updateSortLabel()
+                                d.dismiss()
+                            }
+                            .show()
+                    }
+
+                    // ----- Reset button -----
+                    resetBtt?.setOnClickListener {
+                        tempExcludedQualities = mutableSetOf()
+                        tempYearMin = -1
+                        tempYearMax = -1
+                        tempSortMode = SearchSortMode.DEFAULT
+
+                        for (i in 0 until qualityGroup.childCount) {
+                            (qualityGroup.getChildAt(i) as? Chip)?.isChecked = false
+                        }
+                        yearMinEdit.setText("")
+                        yearMaxEdit.setText("")
+                        updateSortLabel()
+
+                        showToast(R.string.search_filter_reset_toast)
                     }
 
                     cancelBtt?.setOnClickListener {
@@ -387,9 +510,24 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     }
 
                     applyBtt?.setOnClickListener {
-                        //if (currentApiName != selectedApiName) {
-                        //    currentApiName?.let(callback)
-                        //}
+                        val parsedYearMin = yearMinEdit.text.toString().toIntOrNull() ?: -1
+                        val parsedYearMax = yearMaxEdit.text.toString().toIntOrNull() ?: -1
+
+                        // Persist
+                        val applySettings = AppSettings(ctx)
+                        applySettings.ui.filterQuality.set(tempExcludedQualities)
+                        applySettings.ui.searchFilterYearMin.set(parsedYearMin)
+                        applySettings.ui.searchFilterYearMax.set(parsedYearMax)
+                        applySettings.ui.searchFilterSortMode.set(tempSortMode.name)
+
+                        // Apply in-memory
+                        currentSearchFilter = SearchFilter(
+                            excludedQualities = tempExcludedQualities,
+                            yearMin = parsedYearMin.takeIf { it > 0 },
+                            yearMax = parsedYearMax.takeIf { it > 0 },
+                            sortMode = tempSortMode,
+                        )
+
                         dialog.dismissSafe()
                     }
 
@@ -397,9 +535,14 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                         DataStoreHelper.searchPreferenceProviders = currentSelectedApis.toList()
                         selectedApis = currentSelectedApis
 
-                        // run search when dialog is close
-                        if (previousSelectedApis != selectedApis.toSet() || previousSelectedSearchTypes != selectedSearchTypes.toSet()) {
+                        // Re-run search if providers / types changed
+                        if (previousSelectedApis != selectedApis.toSet() ||
+                            previousSelectedSearchTypes != selectedSearchTypes.toSet()
+                        ) {
                             search(binding.mainSearch.query.toString())
+                        } else {
+                            // Only filters changed — re-render current results.
+                            refreshDisplayedResults()
                         }
                     }
                     updateList(selectedSearchTypes.toList())
@@ -409,7 +552,8 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
         val settingsManager = context?.let { PreferenceManager.getDefaultSharedPreferences(it) }
         val isAdvancedSearch = settingsManager?.getBoolean("advanced_search", true) ?: true
-        val isSearchSuggestionsEnabled = settingsManager?.getBoolean("search_suggestions_enabled", true) ?: true
+        val isSearchSuggestionsEnabled =
+            settingsManager?.getBoolean("search_suggestions_enabled", true) ?: true
 
         selectedSearchTypes = DataStoreHelper.searchPreferenceTags.toMutableList()
 
@@ -427,7 +571,6 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             }
         }
 
-
         binding.mainSearch.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
                 search(query)
@@ -441,14 +584,12 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             }
 
             override fun onQueryTextChange(newText: String): Boolean {
-                //searchViewModel.quickSearch(newText)
                 val showHistory = newText.isBlank()
                 if (showHistory) {
                     searchViewModel.clearSearch()
                     searchViewModel.updateHistory()
                     searchViewModel.clearSuggestions()
                 } else {
-                    // Fetch suggestions when user is typing (if enabled)
                     if (isSearchSuggestionsEnabled) {
                         searchViewModel.fetchSuggestions(newText)
                     }
@@ -457,7 +598,6 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     searchHistoryRecycler.isVisible = showHistory
                     searchMasterRecycler.isVisible = !showHistory && isAdvancedSearch
                     searchAutofitResults.isVisible = !showHistory && !isAdvancedSearch
-                    // Hide suggestions when showing history or showing search results
                     searchSuggestionsRecycler.isVisible = !showHistory && isSearchSuggestionsEnabled
                 }
 
@@ -471,8 +611,11 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     it.value.let { data ->
                         val list = data.list
                         if (list.isNotEmpty()) {
+                            val filteredList = list
+                                .filterSearchResponse()
+                                .applySearchFilter(currentSearchFilter)
                             (binding.searchAutofitResults.adapter as? SearchAdapter)?.submitList(
-                                list
+                                filteredList
                             )
                         }
                     }
@@ -481,7 +624,6 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 }
 
                 is Resource.Failure -> {
-                    // Toast.makeText(activity, "Server error", Toast.LENGTH_LONG).show()
                     searchExitIcon?.alpha = 1f
                     binding.searchLoadingBar.alpha = 0f
                 }
@@ -493,55 +635,13 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             }
         }
 
-        val listLock = ReentrantLock()
         observe(searchViewModel.currentSearch) { list ->
             try {
-                // https://stackoverflow.com/questions/6866238/concurrent-modification-exception-adding-to-an-arraylist
-                listLock.lock()
-
-                val pinnedOrder = DataStoreHelper.pinnedProviders.reversedArray()
-
-                val sortedList = list.toList().sortedWith(compareBy { (providerName, _) ->
-                    val index = pinnedOrder.indexOf(providerName)
-                    if (index == -1) Int.MAX_VALUE else index
-                })
-
-                (binding.searchMasterRecycler.adapter as? ParentItemAdapter)?.apply {
-                    val newItems = sortedList.map { (providerName, providerData) ->
-                        val dataList = providerData.list
-                        val dataListFiltered =
-                            context?.filterSearchResultByFilmQuality(dataList) ?: dataList
-
-                        val homePageList = HomePageList(
-                            providerName,
-                            dataListFiltered
-                        )
-
-                        HomeViewModel.ExpandableHomepageList(
-                            homePageList,
-                            providerData.currentPage,
-                            providerData.hasNext
-                        )
-                    }
-
-                    submitList(newItems)
-                    //notifyDataSetChanged()
-                }
+                renderAdvancedSearch(requireContext(), list)
             } catch (e: Exception) {
                 logError(e)
-            } finally {
-                listLock.unlock()
             }
         }
-
-
-        /*main_search.setOnQueryTextFocusChangeListener { _, b ->
-            if (b) {
-                // https://stackoverflow.com/questions/12022715/unable-to-show-keyboard-automatically-in-the-searchview
-                showInputMethod(view.findFocus())
-            }
-        }*/
-        //main_search.onActionViewExpanded()*/
 
         val masterAdapter =
             ParentItemAdapter(id = "masterAdapter".hashCode(), { callback ->
@@ -577,7 +677,6 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 }
 
                 SEARCH_HISTORY_CLEAR -> {
-                    // Show confirmation dialog (from footer button)
                     activity?.let { ctx ->
                         val builder: AlertDialog.Builder = AlertDialog.Builder(ctx)
                         val dialogClickListener =
@@ -617,16 +716,13 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         val suggestionAdapter = SearchSuggestionAdapter { callback ->
             when (callback.clickAction) {
                 SEARCH_SUGGESTION_CLICK -> {
-                    // Search directly
                     binding.mainSearch.setQuery(callback.suggestion, true)
                     searchViewModel.clearSuggestions()
                 }
                 SEARCH_SUGGESTION_FILL -> {
-                    // Fill the search box without searching
                     binding.mainSearch.setQuery(callback.suggestion, false)
                 }
                 SEARCH_SUGGESTION_CLEAR -> {
-                    // Clear suggestions (from footer button)
                     searchViewModel.clearSuggestions()
                 }
             }
@@ -635,19 +731,15 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         binding.apply {
             searchHistoryRecycler.adapter = historyAdapter
             searchHistoryRecycler.setLinearListLayout(isHorizontal = false, nextRight = FOCUS_SELF)
-            //searchHistoryRecycler.layoutManager = GridLayoutManager(context, 1)
 
-            // Setup suggestions RecyclerView
             searchSuggestionsRecycler.adapter = suggestionAdapter
             searchSuggestionsRecycler.layoutManager = LinearLayoutManager(context)
 
             searchMasterRecycler.setRecycledViewPool(ParentItemAdapter.sharedPool)
             searchMasterRecycler.adapter = masterAdapter
-            //searchMasterRecycler.setLinearListLayout(isHorizontal = false, nextRight = FOCUS_SELF)
 
             searchMasterRecycler.layoutManager = GridLayoutManager(context, 1)
 
-            // Automatically search the specified query, this allows the app search to launch from intent
             var sq =
                 arguments?.getString(SEARCH_QUERY) ?: savedInstanceState?.getString(SEARCH_QUERY)
             if (sq.isNullOrBlank()) {
@@ -657,11 +749,9 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             sq?.let { query ->
                 if (query.isBlank()) return@let
 
-                // Queries are dropped if you are submitted before layout finishes
                 mainSearch.doOnLayout {
                     mainSearch.setQuery(query, true)
                 }
-                // Clear the query as to not make it request the same query every time the page is opened
                 arguments?.remove(SEARCH_QUERY)
                 savedInstanceState?.remove(SEARCH_QUERY)
                 MainActivity.nextSearchQuery = null
@@ -670,30 +760,28 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
         observe(searchViewModel.currentHistory) { list ->
             (binding.searchHistoryRecycler.adapter as? SearchHistoryAdaptor?)?.submitList(list)
-             // Scroll to top to show newest items (list is sorted by newest first)
             if (list.isNotEmpty()) {
                 binding.searchHistoryRecycler.scrollToPosition(0)
             }
         }
 
-        // Observe search suggestions
         observe(searchViewModel.searchSuggestions) { suggestions ->
             val hasSuggestions = suggestions.isNotEmpty()
             binding.searchSuggestionsRecycler.isVisible = hasSuggestions
-            (binding.searchSuggestionsRecycler.adapter as? SearchSuggestionAdapter?)?.submitList(suggestions)
+            (binding.searchSuggestionsRecycler.adapter as? SearchSuggestionAdapter?)?.submitList(
+                suggestions
+            )
 
-            // On non-phone layouts, redirect focus and handle back button
             if (!isLayout(PHONE)) {
                 if (hasSuggestions) {
-                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId = R.id.search_suggestions_recycler
-                    // Attach back button callback to clear suggestions
+                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId =
+                        R.id.search_suggestions_recycler
                     activity?.attachBackPressedCallback("SearchFragment") {
                         searchViewModel.clearSuggestions()
                     }
                 } else {
-                    // Reset to default focus target (history)
-                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId = R.id.search_history_recycler
-                    // Detach back button callback when no suggestions
+                    binding.tvtypesChipsScroll.tvtypesChips.root.nextFocusDownId =
+                        R.id.search_history_recycler
                     activity?.detachBackPressedCallback("SearchFragment")
                 }
             }
@@ -701,4 +789,61 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
 
         searchViewModel.updateHistory()
     }
+
+    /**
+     * Render the advanced-search (per-provider) list applying the current filter.
+     * Pulled out of the observer so it can be reused when only the filter changes.
+     */
+    private fun renderAdvancedSearch(
+        ctx: android.content.Context,
+        list: Map<String, ExpandableSearchList>,
+    ) {
+        val b = binding ?: return
+        val pinnedOrder = DataStoreHelper.pinnedProviders.reversedArray()
+
+        val sortedList = list.toList().sortedWith(compareBy { (providerName, _) ->
+            val index = pinnedOrder.indexOf(providerName)
+            if (index == -1) Int.MAX_VALUE else index
+        })
+
+        (b.searchMasterRecycler.adapter as? ParentItemAdapter)?.apply {
+            val newItems = sortedList.map { (providerName, providerData) ->
+                val dataList = providerData.list
+                    .filterSearchResponse()
+                    .applySearchFilter(currentSearchFilter)
+
+                val homePageList = HomePageList(providerName, dataList)
+
+                HomeViewModel.ExpandableHomepageList(
+                    homePageList,
+                    providerData.currentPage,
+                    providerData.hasNext
+                )
+            }
+
+            submitList(newItems)
+        }
+        // suppress unused warning — ctx is kept for symmetry with the observer lambda
+        @Suppress("UNUSED_EXPRESSION") ctx
+    }
+}
+
+// Local alias so we don't have to import SettingsUIScreen in every call site.
+private fun SearchQuality.toStringRes(): Int = when (this) {
+    SearchQuality.BlueRay -> R.string.quality_blueray
+    SearchQuality.Cam -> R.string.quality_cam
+    SearchQuality.CamRip -> R.string.quality_cam_rip
+    SearchQuality.DVD -> R.string.quality_dvd
+    SearchQuality.HD -> R.string.quality_hd
+    SearchQuality.HQ -> R.string.quality_hq
+    SearchQuality.HdCam -> R.string.quality_cam_hd
+    SearchQuality.Telecine -> R.string.quality_tc
+    SearchQuality.Telesync -> R.string.quality_ts
+    SearchQuality.WorkPrint -> R.string.quality_workprint
+    SearchQuality.SD -> R.string.quality_sd
+    SearchQuality.FourK -> R.string.quality_4k
+    SearchQuality.UHD -> R.string.quality_uhd
+    SearchQuality.SDR -> R.string.quality_sdr
+    SearchQuality.HDR -> R.string.quality_hdr
+    SearchQuality.WebRip -> R.string.quality_webrip
 }

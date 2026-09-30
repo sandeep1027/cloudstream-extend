@@ -139,6 +139,11 @@ android {
             "ANILIST_KEY",
             "\"" + (System.getenv("ANILIST_KEY") ?: localProperties["anilist.key"]) + "\""
         )
+        buildConfigField(
+            "String",
+            "TRAKT_CLIENT_ID",
+            "\"" + (System.getenv("TRAKT_CLIENT_ID") ?: localProperties["trakt.id"]) + "\""
+        )
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

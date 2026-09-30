@@ -18,6 +18,7 @@ import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.malApi
 import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.openSubtitlesApi
 import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.simklApi
 import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.subDlApi
+import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.traktApi
 import com.lagradost.cloudstream3.syncproviders.PlainAuthRepo
 import com.lagradost.cloudstream3.syncproviders.SubtitleRepo
 import com.lagradost.cloudstream3.syncproviders.SyncRepo
@@ -47,6 +48,7 @@ object SettingsAccountScreen : SearchableSettings, BiometricAuthenticator.Biomet
         SyncRepo(kitsuApi),
         SyncRepo(aniListApi),
         SyncRepo(simklApi),
+        PlainAuthRepo(traktApi),
         SubtitleRepo(openSubtitlesApi),
         SubtitleRepo(subDlApi),
         PlainAuthRepo(animeSkipApi),

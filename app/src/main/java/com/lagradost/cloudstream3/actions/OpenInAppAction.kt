@@ -27,8 +27,36 @@ fun updateDurationAndPosition(position: Long, duration: Long) {
 }
 
 /**
+ * Build an ArrayList of "Name: Value" strings suitable for VLC's
+ * "http-header-fields" intent extra. Includes the link's Referer header
+ * when not already present in [headers].
+ */
+fun buildHttpHeaderFields(headers: Map<String, String>, referer: String? = null): ArrayList<String> {
+    val fields = ArrayList<String>()
+    val lowerKeys = headers.keys.map { it.lowercase() }.toSet()
+    headers.forEach { (k, v) -> fields.add("$k: $v") }
+    if (!referer.isNullOrBlank() && "referer" !in lowerKeys) {
+        fields.add("Referer: $referer")
+    }
+    return fields
+}
+
+/**
+ * Build a String array of "Name: Value" strings suitable for mpv-android's
+ * "http-header-fields" intent extra.
+ */
+fun buildHttpHeaderArray(headers: Map<String, String>, referer: String? = null): Array<String> {
+    return buildHttpHeaderFields(headers, referer).toTypedArray()
+}
+
+/**
  * Util method that may be helpful for creating intents for apps that support m3u8 files.
  * All sources are written to a temporary m3u8 file, which is then sent to the app.
+ *
+ * The output is a minimal HLS master playlist: each link becomes a variant stream
+ * (#EXT-X-STREAM-INF) so players can pick the quality tier. Subtitles are NOT
+ * embedded in the playlist (most external players reject non-HLS subtitle URIs);
+ * pass them separately via the player's intent extras instead.
  */
 fun makeTempM3U8Intent(
     context: Context,
@@ -48,19 +76,17 @@ fun makeTempM3U8Intent(
     }
 
     val outputFile = File.createTempFile("mirrorlist", ".m3u8", context.cacheDir)
-    var text = "#EXTM3U\n#EXT-X-VERSION:3"
-
-    result.links.forEach { link ->
-        text += "\n#EXTINF:0,${link.name}\n${link.url}"
+    val text = buildString {
+        append("#EXTM3U\n#EXT-X-VERSION:3")
+        result.links.forEach { link ->
+            // BANDWIDTH is required by the HLS spec; we don't know the real
+            // bitrate so use a plausible placeholder scaled by quality tier.
+            val bandwidth = (link.quality.coerceAtLeast(1) * 500_000).coerceAtMost(40_000_000)
+            append("\n#EXT-X-STREAM-INF:BANDWIDTH=$bandwidth,RESOLUTION=${qualityToResolution(link.quality)}")
+            append("\n${link.url}")
+        }
+        append("\n#EXT-X-ENDLIST")
     }
-
-    //With subtitles it doesn't work for no reason :(
-    /*for (sub in result.subs) {
-        val normalizedName = sub.name.replace("[^a-zA-Z0-9 ]".toRegex(), "")
-        text += "\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"${normalizedName}\",DEFAULT=NO,AUTOSELECT=NO,FORCED=NO,LANGUAGE=\"${sub.languageCode}\",URI=\"${sub.url}\""
-    }*/
-
-    text += "\n#EXT-X-ENDLIST"
     outputFile.writeText(text)
 
     intent.setDataAndType(
@@ -70,6 +96,17 @@ fun makeTempM3U8Intent(
             outputFile
         ), "application/x-mpegURL"
     )
+}
+
+/** Map a quality integer (height in pixels, e.g. 1080) to a fallback resolution string. */
+private fun qualityToResolution(quality: Int): String = when {
+    quality >= 2160 -> "3840x2160"
+    quality >= 1440 -> "2560x1440"
+    quality >= 1080 -> "1920x1080"
+    quality >= 720  -> "1280x720"
+    quality >= 480  -> "854x480"
+    quality >= 360  -> "640x360"
+    else            -> "426x240"
 }
 
 abstract class OpenInAppAction(

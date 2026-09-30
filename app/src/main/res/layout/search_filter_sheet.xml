@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="12dp">
+
+        <!-- Provider list (same as home_select_mainpage) -->
+        <ListView
+            android:id="@+id/listview1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:clipToPadding="false"
+            android:minHeight="0dp"
+            android:nestedScrollingEnabled="true"
+            android:nextFocusLeft="@id/apply_btt"
+            android:nextFocusRight="@id/cancel_btt"
+            android:requiresFadingEdge="vertical"
+            tools:listitem="@layout/sort_bottom_single_provider_choice" />
+
+        <!-- TvType chips (reused from existing UI) -->
+        <include
+            android:id="@+id/tvtypes_chips_scroll"
+            layout="@layout/tvtypes_chips_scroll" />
+
+        <!-- Quality chips -->
+        <TextView
+            android:id="@+id/quality_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            android:text="@string/search_filter_quality_label"
+            android:textColor="?attr/textColor"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/quality_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:text="@string/search_filter_quality_hint"
+            android:textColor="?attr/grayTextColor"
+            android:textSize="12sp" />
+
+        <HorizontalScrollView
+            android:id="@+id/quality_scroll_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fadingEdge="horizontal"
+            android:requiresFadingEdge="horizontal">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/quality_chips"
+                style="@style/ChipParent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                app:singleSelection="false" />
+        </HorizontalScrollView>
+
+        <!-- Year range -->
+        <TextView
+            android:id="@+id/year_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            android:text="@string/search_filter_year_label"
+            android:textColor="?attr/textColor"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/year_min_layout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/search_filter_year_from">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/year_min"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLength="4" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <View
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/year_max_layout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/search_filter_year_to">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/year_max"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLength="4" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <!-- Sort -->
+        <TextView
+            android:id="@+id/sort_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            android:text="@string/search_filter_sort_label"
+            android:textColor="?attr/textColor"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sort_button"
+            style="@style/BlackButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:text="@string/sort_default"
+            app:icon="@drawable/ic_baseline_sort_24"
+            app:iconGravity="textStart" />
+
+        <!-- Apply / Cancel buttons -->
+        <LinearLayout
+            android:id="@+id/apply_btt_holder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="bottom|end"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/reset_btt"
+                style="@style/BlackButton"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/sort_clear" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/apply_btt"
+                style="@style/WhiteButton"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_vertical|end"
+                android:text="@string/sort_apply" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/cancel_btt"
+                style="@style/BlackButton"
+                android:layout_width="wrap_content"
+                android:layout_gravity="center_vertical|end"
+                android:text="@string/sort_cancel" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
