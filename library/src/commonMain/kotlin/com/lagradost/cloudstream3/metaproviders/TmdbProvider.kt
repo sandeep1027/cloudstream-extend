@@ -64,6 +64,13 @@ var tmdbApiKeyOverride: String? = null
  */
 var mdblistApiKeyOverride: String? = null
 
+/**
+ * User supplied Trakt client id, set by the app layer from user settings
+ * (Settings -> Player -> Metadata). The public Trakt API requires it in the
+ * `trakt-api-key` header; blank means the feature is unavailable.
+ */
+var traktApiKeyOverride: String? = null
+
 open class TmdbProvider : MainAPI() {
     // This should always be false, but might as well make it easier for forks
     open val includeAdult = false

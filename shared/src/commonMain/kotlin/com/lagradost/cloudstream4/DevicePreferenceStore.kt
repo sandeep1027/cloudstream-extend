@@ -163,6 +163,12 @@ class ProviderPreferences(preferences: PreferenceStore) {
      * Used by the Torrin MDBList extension for latest-releases rows.
      */
     val mdblistApiKey = preferences.getString("mdblist_api_key", "")
+
+    /**
+     * User supplied Trakt client id (free, from trakt.tv developer settings).
+     * Used by the Torrin Trakt extension for latest-releases rows.
+     */
+    val traktApiKey = preferences.getString("trakt_api_key", "")
 }
 
 class PlayerPreferences(preferences: PreferenceStore) {

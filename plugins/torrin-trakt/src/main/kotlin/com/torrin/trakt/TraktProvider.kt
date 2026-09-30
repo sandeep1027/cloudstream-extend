@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.traktApiKeyOverride
 import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
@@ -32,12 +33,13 @@ import java.net.URLEncoder
 
 /**
  * Torrin Trakt — latest releases discovered through the public Trakt calendar,
- * with debrid playback. No API keys required.
+ * with debrid playback.
  *
  * Discovery:
  *  - Curated "Trending" dashboard rows (movies & TV) baked into the plugin
  *  - "Latest Movies" / "Latest Episodes" rows from the Trakt this-week
- *    calendars (https://trakt.tv) — public endpoints, no auth
+ *    calendars (https://trakt.tv) — the public API requires a client id
+ *    (Settings → Player → Metadata); without it these rows stay hidden
  *  - Live search through IMDB's public suggestion API (no key)
  *
  * Streams:
@@ -107,6 +109,9 @@ class TraktProvider : MainAPI() {
     private val traktBuildLock = Mutex()
 
     private suspend fun latestFromTrakt(key: String): List<LatestItem> {
+        // The Trakt calendar API needs a client id; without one the rows
+        // simply stay hidden.
+        if (traktClientId.isBlank()) return emptyList()
         val cached = traktCache
         if (cached != null && System.currentTimeMillis() < cached.first) {
             return cached.second[key].orEmpty()
@@ -653,10 +658,22 @@ class TraktProvider : MainAPI() {
         const val DATA_LATEST_EPISODES = "trakt-latest-episodes"
 
         const val TRAKT_BASE = "https://api.trakt.tv"
-        val TRAKT_HEADERS = mapOf(
-            "User-Agent" to "TorrinTrakt/1.0 (CloudStream plugin)",
-            "Content-Type" to "application/json"
-        )
+
+        /**
+         * The public Trakt API requires a registered client id in the
+         * `trakt-api-key` header (403 Forbidden otherwise). The id is
+         * configured by the user in Settings -> Player -> Metadata.
+         */
+        val traktClientId: String
+            get() = traktApiKeyOverride ?: ""
+
+        val TRAKT_HEADERS: Map<String, String>
+            get() = mapOf(
+                "User-Agent" to "TorrinTrakt/1.0 (CloudStream plugin)",
+                "Content-Type" to "application/json",
+                "trakt-api-version" to "2",
+                "trakt-api-key" to traktClientId
+            )
 
         /** Calendar rows live this long in memory before re-fetching. */
         const val CACHE_TTL = 6 * 60 * 60 * 1000L // 6 h

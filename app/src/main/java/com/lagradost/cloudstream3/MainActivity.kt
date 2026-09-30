@@ -183,6 +183,7 @@ import com.lagradost.cloudstream4.AppSettings
 import com.lagradost.cloudstream4.theme.CloudStreamTheme
 import com.lagradost.cloudstream3.metaproviders.mdblistApiKeyOverride
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.traktApiKeyOverride
 import com.lagradost.safefile.SafeFile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -645,9 +646,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         super.onResume()
         afterPluginsLoadedEvent += ::onAllPluginsLoaded
         setActivityInstance(this)
-        // Keep the user supplied TMDB API key in sync for the library metaprovider
+        // Keep the user supplied API keys in sync for the library metaprovider
         tmdbApiKeyOverride = AppSettings(this).provider.tmdbApiKey.get().takeIf { it.isNotBlank() }
         mdblistApiKeyOverride = AppSettings(this).provider.mdblistApiKey.get().takeIf { it.isNotBlank() }
+        traktApiKeyOverride = AppSettings(this).provider.traktApiKey.get().takeIf { it.isNotBlank() }
         try {
             if (isCastApiAvailable()) {
                 mSessionManager?.addSessionManagerListener(mSessionManagerListener)
@@ -2035,15 +2037,34 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         try {
             if (getKey<Boolean>(HAS_DONE_SETUP_KEY, false) != true) {
                 navController.navigate(R.id.navigation_setup_language)
-                // If no plugins bring up extensions screen
-            } else if (PluginManager.getPluginsOnline().isEmpty()
-                && PluginManager.getPluginsLocal().isEmpty()
-//                && PREBUILT_REPOSITORIES.isNotEmpty()
-            ) {
-                navController.navigate(
-                    R.id.navigation_setup_extensions,
-                    SetupFragmentExtensions.newInstance(false)
-                )
+                // If no plugins bring up extensions screen. The plugin loaders
+                // run concurrently, so wait for them to finish before deciding
+                // that the user has no plugins, otherwise this screen would
+                // show up on every launch.
+            } else {
+                main {
+                    try {
+                        val deadline = System.currentTimeMillis() + 20_000
+                        while (
+                            (!PluginManager.loadedLocalPlugins
+                                    || !PluginManager.loadedOnlinePlugins)
+                            && System.currentTimeMillis() < deadline
+                        ) {
+                            kotlinx.coroutines.delay(250)
+                        }
+                        if (PluginManager.getPluginsOnline().isEmpty()
+                            && PluginManager.getPluginsLocal().isEmpty()
+//                            && PREBUILT_REPOSITORIES.isNotEmpty()
+                        ) {
+                            navController.navigate(
+                                R.id.navigation_setup_extensions,
+                                SetupFragmentExtensions.newInstance(false)
+                            )
+                        }
+                    } catch (e: Exception) {
+                        logError(e)
+                    }
+                }
             }
         } catch (e: Exception) {
             logError(e)

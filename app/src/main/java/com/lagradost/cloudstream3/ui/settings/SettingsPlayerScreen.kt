@@ -125,6 +125,11 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.mdblist_api_key),
                         subtitle = stringResource(R.string.mdblist_api_key_des),
                     ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.traktApiKey,
+                        title = stringResource(R.string.trakt_api_key),
+                        subtitle = stringResource(R.string.trakt_api_key_des),
+                    ),
                 ),
             ),
             Preference.PreferenceGroup(
