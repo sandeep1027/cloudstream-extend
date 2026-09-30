@@ -352,6 +352,13 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     SearchFilterSheetBinding.inflate(builder.layoutInflater, null, false)
                 builder.setContentView(sheetBinding.root)
                 builder.show()
+
+                // Prevent the parent SearchView from stealing focus from year fields.
+                // We clear its focus and temporarily disable focusability while the sheet is open.
+                binding.mainSearch.clearFocus()
+                binding.mainSearch.isFocusable = false
+                binding.mainSearch.isFocusableInTouchMode = false
+
                 builder.let { dialog ->
                     val previousSelectedApis = selectedApis.toSet()
                     val previousSelectedSearchTypes = selectedSearchTypes.toSet()
@@ -532,6 +539,13 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                     }
 
                     dialog.setOnDismissListener {
+                        // Restore the SearchView's focusability now that the sheet is gone,
+                        // then immediately clear focus so it doesn't auto-grab and pop the keyboard.
+                        binding.mainSearch.isFocusable = true
+                        binding.mainSearch.isFocusableInTouchMode = true
+                        binding.mainSearch.clearFocus()
+                        hideKeyboard()
+
                         DataStoreHelper.searchPreferenceProviders = currentSelectedApis.toList()
                         selectedApis = currentSelectedApis
 
