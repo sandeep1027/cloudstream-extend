@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -292,6 +293,7 @@ object SettingsFragmentScreen : Screen {
         var hasFocus by remember { mutableStateOf(false) }
         val focusProgress by animateFloatAsState(targetValue = if (hasFocus) 1.0f else 0.0f)
         val focusManager = LocalFocusManager.current
+        val keyboardController = LocalSoftwareKeyboardController.current
         val focusRequester = remember { FocusRequester() }
         TextField(
             state = textFieldState,
@@ -359,6 +361,8 @@ object SettingsFragmentScreen : Screen {
                     if (value) {
                         IconButton(onClick = {
                             textFieldState.edit { replace(0, length, "") }
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
                         }) {
                             Icon(
                                 painter = painterResource(R.drawable.close_24px),
@@ -370,7 +374,12 @@ object SettingsFragmentScreen : Screen {
             },
         )
 
-        val keyboardController = LocalSoftwareKeyboardController.current
+        BackHandler(enabled = hasFocus) {
+            textFieldState.edit { replace(0, length, "") }
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+
         DisposableEffect(Unit) {
             onDispose {
                 keyboardController?.hide()
