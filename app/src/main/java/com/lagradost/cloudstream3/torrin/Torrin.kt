@@ -1,7 +1,6 @@
 package com.lagradost.cloudstream3.torrin
 
 import android.content.Context
-import android.util.Log
 import androidx.preference.PreferenceManager
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -29,6 +28,8 @@ import java.util.Locale
 object Torrin {
 
     private const val POLL_INTERVAL_MS = 2_000L
+    private const val MAX_RETRIES = 3
+    private const val RETRY_BASE_DELAY_MS = 1_000L
 
     private val FILE_HINT_PATTERN = Regex("""[&?]cs_file=(\d+)""")
     // Strips every client-side cs_* hint (cs_file, cs_debrid, ...) so only
@@ -42,6 +43,9 @@ object Torrin {
     private val VIDEO_EXTENSIONS = setOf(
         "mp4", "mkv", "avi", "mov", "m4v", "webm", "mpg", "mpeg", "ts", "m2ts", "m3u8"
     )
+
+    private val INFO_HASH_PATTERN =
+        Regex("urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})")
 
     @Serializable
     data class TorrinFile(
@@ -72,6 +76,13 @@ object Torrin {
         val streamUrls: List<TorrinStreamUrl>? = null,
     )
 
+    // User info response for test connection
+    @Serializable
+    data class TorrinUserResponse(
+        val success: Boolean = false,
+        val message: String? = null,
+    )
+
     /** True when the user enabled Torrin and provided an API key. */
     fun isEnabled(context: Context): Boolean {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -79,7 +90,7 @@ object Torrin {
             getApiKey(context).isNotBlank()
     }
 
-    private fun getApiKey(context: Context): String =
+    fun getApiKey(context: Context): String =
         PreferenceManager.getDefaultSharedPreferences(context)
             .getString(DebridPreferences.KEY_API_KEY, null)
             ?.trim()
@@ -105,6 +116,34 @@ object Torrin {
     )
 
     /**
+     * Tests the Torrin API connection.
+     * Returns a Pair of (success, message).
+     */
+    suspend fun testConnection(context: Context): Pair<Boolean, String> {
+        val apiKey = getApiKey(context)
+        if (apiKey.isBlank()) return false to "No API key configured"
+
+        val baseUrl = getBaseUrl(context)
+        return try {
+            // Try to submit a dummy job to test auth (will fail but tests connection)
+            val response = app.post(
+                url = "$baseUrl/api/jobs",
+                json = mapOf("magnet" to "magnet:?xt=urn:btih:0000000000000000000000000000000000000000"),
+                headers = authHeaders(apiKey),
+            )
+            // Any response other than 401/403 means auth worked
+            if (response.code == 401 || response.code == 403) {
+                false to "Authentication failed: Invalid API key"
+            } else {
+                true to "Connected to Torrin successfully!"
+            }
+        } catch (t: Throwable) {
+            DebridLogger.torboxW(context, "testConnection failed", t)
+            false to "Connection error: ${t.message}"
+        }
+    }
+
+    /**
      * Resolves a magnet link through Torrin and returns a playable direct-link
      * [ExtractorLink], or `null` when Torrin is not usable or the job could not
      * be completed in time. Never throws.
@@ -112,17 +151,47 @@ object Torrin {
     suspend fun transformLink(context: Context, link: ExtractorLink): ExtractorLink? {
         if (link.type != ExtractorLinkType.MAGNET) return null
         if (!isEnabled(context)) return null
+
+        val startTime = System.currentTimeMillis()
         val apiKey = getApiKey(context)
         val baseUrl = getBaseUrl(context)
         val timeoutMs = getTimeoutSeconds(context) * 1000L
 
         return try {
             val (cleanMagnet, preferredFile) = parseFileHint(link.url)
-            val job = submitJob(baseUrl, apiKey, cleanMagnet) ?: return null
-            val completed = waitForCompletion(baseUrl, apiKey, job, timeoutMs) ?: return null
-            buildStreamLink(completed, preferredFile)
+            val infoHash = INFO_HASH_PATTERN.find(cleanMagnet)
+                ?.groupValues?.get(1)?.uppercase(Locale.ROOT)
+
+            // 1. Check local cache first
+            if (infoHash != null) {
+                DebridCache.get(infoHash)?.let { cached ->
+                    DebridLogger.cacheD(context, "Cache hit for $infoHash")
+                    DebridLogger.logDuration(context, "Torrin", "Cache hit", startTime)
+                    return cached
+                }
+                DebridLogger.cacheD(context, "Cache miss for $infoHash")
+            }
+
+            // 2. Submit job with retry
+            DebridLogger.torrinD(context, "Submitting job for magnet")
+            val job = submitJobWithRetry(context, baseUrl, apiKey, cleanMagnet) ?: return null
+            DebridLogger.torrinD(context, "Job ${job.id} submitted, status: ${job.status}")
+
+            // 3. Wait for completion
+            val completed = waitForCompletion(context, baseUrl, apiKey, job, timeoutMs) ?: return null
+
+            // 4. Build stream link
+            val streamLink = buildStreamLink(context, completed, preferredFile) ?: return null
+
+            // 5. Cache the result
+            if (infoHash != null) {
+                DebridCache.put(infoHash, streamLink)
+            }
+            DebridLogger.logDuration(context, "Torrin", "Full resolution", startTime)
+
+            streamLink
         } catch (t: Throwable) {
-            logError("failed to resolve ${link.url}", t)
+            DebridLogger.torboxW(context, "failed to resolve ${link.url}", t)
             null
         }
     }
@@ -154,39 +223,58 @@ object Torrin {
         return out to index
     }
 
-    private fun logError(message: String) {
-        Log.w("Torrin", message)
+    /**
+     * Submits a job with retry logic for transient failures.
+     */
+    private suspend fun submitJobWithRetry(
+        context: Context,
+        baseUrl: String,
+        apiKey: String,
+        magnet: String
+    ): TorrinJob? {
+        var lastError: String? = null
+        for (attempt in 1..MAX_RETRIES) {
+            val result = submitJob(context, baseUrl, apiKey, magnet)
+            if (result != null) return result
+
+            lastError = "Attempt $attempt/$MAX_RETRIES failed"
+            DebridLogger.torboxD(context, lastError)
+
+            if (attempt < MAX_RETRIES) {
+                // Exponential backoff: 1s, 2s, 4s
+                val delay = RETRY_BASE_DELAY_MS * (1L shl (attempt - 1))
+                delay(delay)
+            }
+        }
+        DebridLogger.torboxW(context, "submitJob failed after $MAX_RETRIES attempts: $lastError")
+        return null
     }
 
-    private fun logError(message: String, throwable: Throwable) {
-        Log.w("Torrin", message, throwable)
-    }
-
-    private suspend fun submitJob(baseUrl: String, apiKey: String, magnet: String): TorrinJob? {
+    private suspend fun submitJob(context: Context, baseUrl: String, apiKey: String, magnet: String): TorrinJob? {
         val response = app.post(
             url = "$baseUrl/api/jobs",
             json = mapOf("magnet" to magnet),
             headers = authHeaders(apiKey),
         )
         if (!response.isSuccessful) {
-            logError("submit job failed with code ${response.code}: ${response.text}")
+            DebridLogger.torboxW(context, "submit job failed with code ${response.code}: ${response.text}")
             return null
         }
         val job = response.parsedSafe<TorrinJob>()
         if (job?.id.isNullOrBlank()) {
-            logError("submit job returned an unparsable body: ${response.text}")
+            DebridLogger.torboxW(context, "submit job returned an unparsable body: ${response.text}")
             return null
         }
         return job
     }
 
-    private suspend fun getJob(baseUrl: String, apiKey: String, id: String): TorrinJob? {
+    private suspend fun getJob(context: Context, baseUrl: String, apiKey: String, id: String): TorrinJob? {
         val response = app.get(
             url = "$baseUrl/api/jobs/$id",
             headers = authHeaders(apiKey),
         )
         if (!response.isSuccessful) {
-            logError("job status check failed with code ${response.code}: ${response.text}")
+            DebridLogger.torboxW(context, "job status check failed with code ${response.code}: ${response.text}")
             return null
         }
         return response.parsedSafe<TorrinJob>()
@@ -197,6 +285,7 @@ object Torrin {
      * Returns `null` when the job can no longer produce a stream.
      */
     private suspend fun waitForCompletion(
+        context: Context,
         baseUrl: String,
         apiKey: String,
         initialJob: TorrinJob,
@@ -208,17 +297,17 @@ object Torrin {
             when (job.status.lowercase(Locale.ROOT)) {
                 STATUS_COMPLETE -> return job
                 STATUS_FAILED, STATUS_EVICTED -> {
-                    logError("job ${job.id} ended with status '${job.status}': ${job.error}")
+                    DebridLogger.torboxW(context, "job ${job.id} ended with status '${job.status}': ${job.error}")
                     return null
                 }
             }
             if (System.currentTimeMillis() >= deadline) {
-                logError("job ${job.id} timed out after ${timeoutMs}ms (status '${job.status}')")
+                DebridLogger.torboxW(context, "job ${job.id} timed out after ${timeoutMs}ms (status '${job.status}')")
                 return null
             }
             delay(POLL_INTERVAL_MS)
             // Keep the last known job if a status check fails transiently.
-            job = getJob(baseUrl, apiKey, job.id) ?: job
+            job = getJob(context, baseUrl, apiKey, job.id) ?: job
         }
     }
 
@@ -228,11 +317,11 @@ object Torrin {
      * first (episode selection for multi-file torrents); otherwise the
      * largest video-like file wins.
      */
-    private suspend fun buildStreamLink(job: TorrinJob, preferredFile: Int?): ExtractorLink? {
+    private suspend fun buildStreamLink(context: Context, job: TorrinJob, preferredFile: Int?): ExtractorLink? {
         val streams = job.streamUrls.orEmpty()
             .filter { it.signedUrl.isNotBlank() }
         if (streams.isEmpty()) {
-            logError("job ${job.id} completed but has no stream URLs")
+            DebridLogger.torboxW(context, "job ${job.id} completed but has no stream URLs")
             return null
         }
 

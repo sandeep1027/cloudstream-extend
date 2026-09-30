@@ -21,17 +21,20 @@ import java.util.Locale
  * it so the video plays directly.
  *
  * API reference (TorBox-App/torbox-sdk-*):
- * - `POST /{v}/api/torrents/createtorrent`   body: magnet=... (form)
+ * - `POST /{v}/api/torrents/createtorrent`   body: multipart/form-data with magnet=...
  *    -> `{data: {torrent_id, queued_id, hash}}`
- * - `GET  /{v}/api/torrents/mylist?id_={id}&bypass_cache=true`
- *    -> `{data: [{id, name, hash, download_state, download_finished, files: [...]}]}`
+ * - `GET  /{v}/api/torrents/mylist?id={id}&bypass_cache=true`
+ *    -> `{data: {id, name, hash, download_state, download_finished, files: [...]}}`  (single object when id= is passed)
  * - `GET  /{v}/api/torrents/requestdl?token=***&torrent_id=...&file_id=...&redirect=false`
  *    -> `{data: "<cdn url>"}`
+ * - `GET  /{v}/api/torrents/checkcached?hash=...` -> check if torrent is already cached
  * - Auth: `Authorization: Bearer *** key` (requestdl takes `token=` query param)
  */
 object TorBox {
 
     private const val POLL_INTERVAL_MS = 3_000L
+    private const val MAX_RETRIES = 3
+    private const val RETRY_BASE_DELAY_MS = 1_000L
 
     private val FILE_HINT_PATTERN = Regex("""[&?]cs_file=(\d+)""")
     // Strips every client-side cs_* hint (cs_file, cs_debrid, ...) so only
@@ -88,9 +91,51 @@ object TorBox {
         val detail: String? = null,
     )
 
+    // Response when mylist is called with ?id= (returns single object, not list)
+    @Serializable
+    data class TbSingleResponse(
+        val data: TbTorrent? = null,
+        val success: Boolean = false,
+        val detail: String? = null,
+    )
+
     @Serializable
     data class TbDlResponse(
         val data: String = "",
+        val success: Boolean = false,
+        val detail: String? = null,
+    )
+
+    // Cache check response
+    @Serializable
+    data class TbCacheCheckData(
+        val hash: String = "",
+        val cached: Boolean = false,
+        val files: List<TbFile>? = null,
+        val instant: Boolean = false,
+    )
+
+    @Serializable
+    data class TbCacheCheckResponse(
+        val data: Map<String, TbCacheCheckData>? = null,
+        val success: Boolean = false,
+        val detail: String? = null,
+    )
+
+    // User info response for test connection
+    @Serializable
+    data class TbUserData(
+        val email: String = "",
+        val premium: Int = 0,
+        val expires_at: String? = null,
+        val current_plan: String? = null,
+        val total_used: Double = 0.0,
+        val total_data: Double = 0.0,
+    )
+
+    @Serializable
+    data class TbUserResponse(
+        val data: TbUserData? = null,
         val success: Boolean = false,
         val detail: String? = null,
     )
@@ -102,7 +147,7 @@ object TorBox {
             getApiKey(context).isNotBlank()
     }
 
-    private fun getApiKey(context: Context): String =
+    fun getApiKey(context: Context): String =
         PreferenceManager.getDefaultSharedPreferences(context)
             .getString(DebridPreferences.KEY_TORBOX_API_KEY, null)
             ?.trim()
@@ -122,6 +167,64 @@ object TorBox {
     )
 
     /**
+     * Tests the TorBox API connection by fetching user info.
+     * Returns a Pair of (success, message).
+     */
+    suspend fun testConnection(context: Context): Pair<Boolean, String> {
+        val apiKey = getApiKey(context)
+        if (apiKey.isBlank()) return false to "No API key configured"
+
+        val baseUrl = getBaseUrl()
+        return try {
+            val response = app.get(
+                url = "$baseUrl/user/webhook",
+                headers = authHeaders(apiKey),
+            )
+            if (!response.isSuccessful) {
+                return false to "Connection failed: HTTP ${response.code}"
+            }
+            val parsed = response.parsedSafe<TbUserResponse>()
+            if (parsed == null || !parsed.success || parsed.data == null) {
+                return false to "Invalid response from server"
+            }
+            val user = parsed.data
+            val premium = if (user.premium > 0) "Premium" else "Free"
+            val plan = user.current_plan ?: "Unknown"
+            val expires = user.expires_at?.takeIf { it.isNotBlank() } ?: "N/A"
+            true to "Connected!\nPlan: $premium ($plan)\nExpires: $expires"
+        } catch (t: Throwable) {
+            DebridLogger.torboxW(context, "testConnection failed", t)
+            false to "Connection error: ${t.message}"
+        }
+    }
+
+    /**
+     * Pre-checks if a torrent is already cached on TorBox servers.
+     * Returns the cached torrent info if available, null otherwise.
+     */
+    private suspend fun checkCached(
+        context: Context,
+        baseUrl: String,
+        apiKey: String,
+        infoHash: String
+    ): TbCacheCheckData? {
+        return try {
+            val response = app.get(
+                url = "$baseUrl/torrents/checkcached?hash=$infoHash",
+                headers = authHeaders(apiKey),
+            )
+            if (!response.isSuccessful) return null
+            val parsed = response.parsedSafe<TbCacheCheckResponse>() ?: return null
+            if (!parsed.success) return null
+            // Response is a map keyed by hash
+            return parsed.data?.values?.firstOrNull { it.cached || it.instant }
+        } catch (t: Throwable) {
+            DebridLogger.torboxW(context, "checkCached failed for $infoHash", t)
+            null
+        }
+    }
+
+    /**
      * Resolves a magnet link through TorBox and returns a playable direct-link
      * [ExtractorLink], or `null` when TorBox is not usable or the torrent
      * could not be completed in time. Never throws.
@@ -129,6 +232,8 @@ object TorBox {
     suspend fun transformLink(context: Context, link: ExtractorLink): ExtractorLink? {
         if (link.type != ExtractorLinkType.MAGNET) return null
         if (!isEnabled(context)) return null
+
+        val startTime = System.currentTimeMillis()
         val apiKey = getApiKey(context)
         val baseUrl = getBaseUrl()
         val timeoutMs = getTimeoutSeconds(context) * 1000L
@@ -138,21 +243,50 @@ object TorBox {
             val infoHash = INFO_HASH_PATTERN.find(cleanMagnet)
                 ?.groupValues?.get(1)?.uppercase(Locale.ROOT)
                 ?: run {
-                    logError("no info hash in magnet: ${link.url}")
+                    DebridLogger.torboxW(context, "no info hash in magnet: ${link.url}")
                     return null
                 }
-            val created = createTorrent(baseUrl, apiKey, cleanMagnet)
+
+            // 1. Check local cache first
+            DebridCache.get(infoHash)?.let { cached ->
+                DebridLogger.cacheD(context, "Cache hit for $infoHash")
+                DebridLogger.logDuration(context, "TorBox", "Cache hit", startTime)
+                return cached
+            }
+            DebridLogger.cacheD(context, "Cache miss for $infoHash")
+
+            // 2. Check if already cached on TorBox servers
+            DebridLogger.torboxD(context, "Checking cache availability for $infoHash")
+            val cachedOnServer = checkCached(context, baseUrl, apiKey, infoHash)
+            if (cachedOnServer != null) {
+                DebridLogger.torboxD(context, "Found cached on TorBox servers")
+            }
+
+            // 3. Submit to TorBox (or use cached)
+            val created = createTorrentWithRetry(context, baseUrl, apiKey, cleanMagnet)
                 ?: return null
             if (created.torrent_id <= 0 && (created.queued_id ?: 0.0) <= 0) {
-                logError("createtorrent returned no torrent id (hash $infoHash)")
+                DebridLogger.torboxW(context, "createtorrent returned no torrent id (hash $infoHash)")
                 return null
             }
             val torrentId = created.torrent_id.takeIf { it > 0 } ?: created.queued_id!!
-            val finished = waitForCompletion(baseUrl, apiKey, torrentId, infoHash, timeoutMs)
+            DebridLogger.torboxD(context, "Created torrent $torrentId for hash $infoHash")
+
+            // 4. Wait for completion
+            val finished = waitForCompletion(context, baseUrl, apiKey, torrentId, infoHash, timeoutMs)
                 ?: return null
-            buildStreamLink(apiKey, finished, preferredFile)
+
+            // 5. Get stream link
+            val streamLink = buildStreamLink(context, apiKey, finished, preferredFile)
+                ?: return null
+
+            // 6. Cache the result
+            DebridCache.put(infoHash, streamLink)
+            DebridLogger.logDuration(context, "TorBox", "Full resolution", startTime)
+
+            streamLink
         } catch (t: Throwable) {
-            logError("failed to resolve ${link.url}", t)
+            DebridLogger.torboxW(context, "failed to resolve ${link.url}", t)
             null
         }
     }
@@ -173,17 +307,37 @@ object TorBox {
         return clean to match.groupValues[1].toInt()
     }
 
-    private fun logError(message: String) {
-        Log.w("TorBox", message)
-    }
+    /**
+     * Creates a torrent with retry logic for transient failures.
+     */
+    private suspend fun createTorrentWithRetry(
+        context: Context,
+        baseUrl: String,
+        apiKey: String,
+        magnet: String
+    ): TbCreateData? {
+        var lastError: String? = null
+        for (attempt in 1..MAX_RETRIES) {
+            val result = createTorrent(context, baseUrl, apiKey, magnet)
+            if (result != null) return result
 
-    private fun logError(message: String, throwable: Throwable) {
-        Log.w("TorBox", message, throwable)
+            lastError = "Attempt $attempt/$MAX_RETRIES failed"
+            DebridLogger.torboxD(context, lastError)
+
+            if (attempt < MAX_RETRIES) {
+                // Exponential backoff: 1s, 2s, 4s
+                val delay = RETRY_BASE_DELAY_MS * (1L shl (attempt - 1))
+                delay(delay)
+            }
+        }
+        DebridLogger.torboxW(context, "createTorrent failed after $MAX_RETRIES attempts: $lastError")
+        return null
     }
 
     private suspend fun createTorrent(
+        context: Context,
         baseUrl: String,
-        apiKey : String,
+        apiKey: String,
         magnet: String
     ): TbCreateData? {
         val response = app.post(
@@ -192,37 +346,39 @@ object TorBox {
             data = mapOf("magnet" to magnet),
         )
         if (!response.isSuccessful) {
-            logError("createtorrent failed with code ${response.code}: ${response.text}")
+            DebridLogger.torboxW(context, "createtorrent failed with code ${response.code}: ${response.text}")
             return null
         }
         val parsed = response.parsedSafe<TbCreateResponse>()
         if (parsed == null) {
-            logError("createtorrent returned an unparsable body: ${response.text}")
+            DebridLogger.torboxW(context, "createtorrent returned an unparsable body: ${response.text}")
             return null
         }
         if (!parsed.success) {
-            logError("createtorrent rejected: ${parsed.detail}")
+            DebridLogger.torboxW(context, "createtorrent rejected: ${parsed.detail}")
             return null
         }
         return parsed.data
     }
 
     private suspend fun getTorrent(
+        context: Context,
         baseUrl: String,
         apiKey : String,
         torrentId: Double
     ): TbTorrent? {
         val id = if (torrentId % 1.0 == 0.0) torrentId.toLong().toString() else torrentId.toString()
         val response = app.get(
-            url = "$baseUrl/torrents/mylist?id_=$id&bypass_cache=true",
+            url = "$baseUrl/torrents/mylist?id=$id&bypass_cache=true",
             headers = authHeaders(apiKey),
         )
         if (!response.isSuccessful) {
-            logError("mylist failed with code ${response.code}: ${response.text}")
+            DebridLogger.torboxW(context, "mylist failed with code ${response.code}: ${response.text}")
             return null
         }
-        val parsed = response.parsedSafe<TbListResponse>() ?: return null
-        return parsed.data?.firstOrNull { it.id == torrentId }
+        // When ?id= is passed, the API returns a single object, not a list
+        val parsed = response.parsedSafe<TbSingleResponse>() ?: return null
+        return parsed.data
     }
 
     /**
@@ -231,6 +387,7 @@ object TorBox {
      * produce a stream.
      */
     private suspend fun waitForCompletion(
+        context: Context,
         baseUrl: String,
         apiKey : String,
         torrentId: Double,
@@ -240,23 +397,20 @@ object TorBox {
         val deadline = System.currentTimeMillis() + timeoutMs
         var lastState: String? = null
         while (true) {
-            val torrent = getTorrent(baseUrl, apiKey, torrentId)
+            val torrent = getTorrent(context, baseUrl, apiKey, torrentId)
             if (torrent != null) {
                 if (torrent.download_finished) return torrent
                 if (torrent.download_state.lowercase(Locale.ROOT) in FAILED_STATES) {
-                    logError("torrent $torrentId (hash $infoHash) ended with state '${torrent.download_state}'")
+                    DebridLogger.torboxW(context, "torrent $torrentId (hash $infoHash) ended with state '${torrent.download_state}'")
                     return null
                 }
                 if (torrent.download_state != lastState) {
-                    Log.i(
-                        "TorBox",
-                        "torrent $torrentId (hash $infoHash) state '${torrent.download_state}' progress ${torrent.progress}"
-                    )
+                    DebridLogger.torboxI(context, "torrent $torrentId (hash $infoHash) state '${torrent.download_state}' progress ${torrent.progress}")
                     lastState = torrent.download_state
                 }
             }
             if (System.currentTimeMillis() >= deadline) {
-                logError("torrent $torrentId timed out after ${timeoutMs}ms (state '${lastState ?: "unknown"}')")
+                DebridLogger.torboxW(context, "torrent $torrentId timed out after ${timeoutMs}ms (state '${lastState ?: "unknown"}')")
                 return null
             }
             delay(POLL_INTERVAL_MS)
@@ -268,21 +422,22 @@ object TorBox {
      * wraps it into a playable [ExtractorLink].
      */
     private suspend fun buildStreamLink(
+        context: Context,
         apiKey : String,
         torrent: TbTorrent,
         preferredFile: Int?
     ): ExtractorLink? {
         val files = torrent.files.orEmpty()
         if (files.isEmpty()) {
-            logError("torrent ${torrent.id} completed but has no files")
+            DebridLogger.torboxW(context, "torrent ${torrent.id} completed but has no files")
             return null
         }
         val best = selectFile(files, preferredFile)
             ?: run {
-                logError("no video-like file in torrent ${torrent.id}")
+                DebridLogger.torboxW(context, "no video-like file in torrent ${torrent.id}")
                 return null
             }
-        val url = requestDownloadLink(apiKey, torrent.id, best.id)
+        val url = requestDownloadLink(context, apiKey, torrent.id, best.id)
             ?: return null
         if (url.isBlank()) return null
         val name = best.name.ifBlank { torrent.name.ifBlank { "TorBox" } }
@@ -300,6 +455,7 @@ object TorBox {
      * the link for a few hours once the download starts.
      */
     private suspend fun requestDownloadLink(
+        context: Context,
         apiKey : String,
         torrentId: Double,
         fileId: Double
@@ -318,12 +474,12 @@ object TorBox {
             }
         )
         if (!response.isSuccessful) {
-            logError("requestdl failed with code ${response.code}: ${response.text}")
+            DebridLogger.torboxW(context, "requestdl failed with code ${response.code}: ${response.text}")
             return null
         }
         val parsed = response.parsedSafe<TbDlResponse>()
         if (parsed == null || !parsed.success) {
-            logError("requestdl rejected: ${parsed?.detail}")
+            DebridLogger.torboxW(context, "requestdl rejected: ${parsed?.detail}")
             return null
         }
         return parsed.data

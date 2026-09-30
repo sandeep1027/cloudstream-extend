@@ -1,12 +1,14 @@
 package com.lagradost.cloudstream3.ui.settings
 
 import android.text.format.Formatter.formatShortFileSize
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.integerArrayResource
@@ -16,6 +18,10 @@ import androidx.compose.ui.res.stringResource
 import com.lagradost.cloudstream3.CommonActivity.activity
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
+import com.lagradost.cloudstream3.torrin.DebridLogger
+import com.lagradost.cloudstream3.torrin.RealDebrid
+import com.lagradost.cloudstream3.torrin.TorBox
+import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.source_priority.QualityProfileDialog
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.getFolderSize
 import com.lagradost.cloudstream3.ui.subtitles.ChromecastSubtitlesFragment
@@ -30,6 +36,7 @@ import com.mihon.presentation.settings.Preference
 import com.mihon.presentation.settings.SearchableSettings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.reflect.jvm.jvmName
 
@@ -99,6 +106,19 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torrin_base_url),
                         subtitle = stringResource(R.string.torrin_base_url_des),
                     ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test Torrin Connection",
+                        subtitle = "Verify your Torrin API key",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = Torrin.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
                     Preference.PreferenceItem.SwitchPreference(
                         preference = settings.debrid.torboxEnabled,
                         title = stringResource(R.string.torbox_enabled),
@@ -109,6 +129,49 @@ object SettingsPlayerScreen : SearchableSettings {
                         preference = settings.debrid.torboxApiKey,
                         title = stringResource(R.string.torbox_api_key),
                         subtitle = stringResource(R.string.torbox_api_key_des),
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test TorBox Connection",
+                        subtitle = "Verify your TorBox API key and show account info",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = TorBox.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.realDebridEnabled,
+                        title = "Real-Debrid",
+                        subtitle = "Enable Real-Debrid debrid service",
+                        icon = painterResource(R.drawable.dns_24px),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.debrid.realDebridApiKey,
+                        title = "Real-Debrid API Key",
+                        subtitle = "Your Real-Debrid API token",
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test Real-Debrid Connection",
+                        subtitle = "Verify your Real-Debrid API key and show account info",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = RealDebrid.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.debridDebugEnabled,
+                        title = "Debug Logging",
+                        subtitle = "Enable verbose logging for debrid services (check Logcat)",
+                        icon = painterResource(R.drawable.build_24px),
                     ),
                 ),
             ),
