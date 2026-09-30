@@ -183,6 +183,8 @@ import com.lagradost.cloudstream4.AppSettings
 import com.lagradost.cloudstream4.theme.CloudStreamTheme
 import com.lagradost.cloudstream3.metaproviders.mdblistApiKeyOverride
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbRegionOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbLanguageOverride
 import com.lagradost.cloudstream3.metaproviders.traktApiKeyOverride
 import com.lagradost.safefile.SafeFile
 import kotlinx.coroutines.Job
@@ -650,6 +652,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         tmdbApiKeyOverride = AppSettings(this).provider.tmdbApiKey.get().takeIf { it.isNotBlank() }
         mdblistApiKeyOverride = AppSettings(this).provider.mdblistApiKey.get().takeIf { it.isNotBlank() }
         traktApiKeyOverride = AppSettings(this).provider.traktApiKey.get().takeIf { it.isNotBlank() }
+        // Keep the user supplied TMDB region and language in sync
+        tmdbRegionOverride = AppSettings(this).player.tmdbRegion.get().takeIf { it.isNotBlank() }
+        tmdbLanguageOverride = AppSettings(this).player.tmdbLanguage.get().takeIf { it.isNotBlank() }
         try {
             if (isCastApiAvailable()) {
                 mSessionManager?.addSessionManagerListener(mSessionManagerListener)

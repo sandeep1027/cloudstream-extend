@@ -391,6 +391,10 @@
     <string name="mdblist_api_key_des">Free key from mdblist.com (account → Preferences). Required for the Torrin MDBList extension latest-releases rows. Leave empty to disable them</string>
     <string name="trakt_api_key">Trakt client id</string>
     <string name="trakt_api_key_des">Free client id from trakt.tv (Settings → API → Create New App). Required for the Torrin Trakt extension latest-rows. Leave empty to disable them</string>
+    <string name="tmdb_region">TMDB Region</string>
+    <string name="tmdb_region_des">Your region for localized content (e.g., IN for India, US for United States). Affects trending and popular content.</string>
+    <string name="tmdb_language">TMDB Language</string>
+    <string name="tmdb_language_des">Language for content metadata (e.g., en-US for English, hi-IN for Hindi). Affects titles and descriptions.</string>
     <string name="pref_category_player_layout">Layout</string>
     <string name="pref_category_defaults">Defaults</string>
     <string name="pref_category_looks">Looks</string>

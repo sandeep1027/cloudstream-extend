@@ -201,6 +201,10 @@ class PlayerPreferences(preferences: PreferenceStore) {
     val bufferTimeSec = preferences.getInt("video_buffer_length_key", 0)
     val tvSeekOnTime = preferences.getInt("android_tv_interface_on_seek_key", 10)
     val tvSeekOffTime = preferences.getInt("android_tv_interface_off_seek_key", 10)
+
+    // TMDB region and language preferences for localized content
+    val tmdbRegion = preferences.getString("tmdb_region_key", "US")
+    val tmdbLanguage = preferences.getString("tmdb_language_key", "en-US")
 }
 
 class GeneralPreferences(preferences: PreferenceStore) {

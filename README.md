@@ -24,6 +24,7 @@
 + **Torrin Trakt extension (`plugins/torrin-trakt/`):** "Latest Movies" / "Latest Episodes" rows from the public [Trakt](https://trakt.tv) calendar — no API keys — plus trending rows, with Torrin/TorBox debrid playback.
 + **Anime extension (`plugins/anime/`):** full [AniList](https://anilist.co) integration with GraphQL API for anime discovery and playback through debrid services.
 + **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own key or leave blank to use the built-in shared key.
++ **User-configurable TMDB region and language:** Settings → Player → Metadata — choose your region (e.g., India, United States) and language (e.g., Hindi, English) to get localized content, trending movies/shows, and metadata in your preferred language.
 
 ### Install the plugins
 
