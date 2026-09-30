@@ -39,6 +39,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,7 +55,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -291,10 +292,19 @@ object SettingsFragmentScreen : Screen {
     @Composable
     fun SettingsSearch(textFieldState : TextFieldState) {
         var hasFocus by remember { mutableStateOf(false) }
+        var collapsing by remember { mutableStateOf(false) }
         val focusProgress by animateFloatAsState(targetValue = if (hasFocus) 1.0f else 0.0f)
-        val focusManager = LocalFocusManager.current
         val keyboardController = LocalSoftwareKeyboardController.current
         val focusRequester = remember { FocusRequester() }
+
+        fun collapseSearch() {
+            if (collapsing) return
+            collapsing = true
+            textFieldState.edit { replace(0, length, "") }
+            keyboardController?.hide()
+            hasFocus = false
+        }
+
         TextField(
             state = textFieldState,
             keyboardOptions = KeyboardOptions.Default.copy(
@@ -307,7 +317,12 @@ object SettingsFragmentScreen : Screen {
                 .padding(horizontal = 24.dp - 12.dp * focusProgress)
                 .focusOutline(enabled = isLayout(TV), CircleShape)
                 .onFocusChanged { newFocus ->
-                    hasFocus = newFocus.hasFocus
+                    if (newFocus.hasFocus && !collapsing) {
+                        hasFocus = true
+                    } else if (!newFocus.hasFocus) {
+                        hasFocus = false
+                        collapsing = false
+                    }
                 }.focusRequester(focusRequester),
             placeholder = {
                 Text(text = stringResource(R.string.search_hint))
@@ -332,10 +347,7 @@ object SettingsFragmentScreen : Screen {
                     label = "leftsearch",
                 ) { value ->
                     if (value) {
-                        IconButton(onClick = {
-                            textFieldState.edit { replace(0, length, "") }
-                            focusManager.clearFocus()
-                        }) {
+                        IconButton(onClick = { collapseSearch() }) {
                             Icon(
                                 painter = painterResource(R.drawable.keyboard_arrow_left_24px),
                                 contentDescription = null
@@ -343,6 +355,7 @@ object SettingsFragmentScreen : Screen {
                         }
                     } else {
                         IconButton(onClick = {
+                            collapsing = false
                             focusRequester.requestFocus()
                         }) {
                             Icon(
@@ -359,11 +372,7 @@ object SettingsFragmentScreen : Screen {
                     label = "rightsearch",
                 ) { value ->
                     if (value) {
-                        IconButton(onClick = {
-                            textFieldState.edit { replace(0, length, "") }
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        }) {
+                        IconButton(onClick = { collapseSearch() }) {
                             Icon(
                                 painter = painterResource(R.drawable.close_24px),
                                 contentDescription = null
@@ -374,10 +383,15 @@ object SettingsFragmentScreen : Screen {
             },
         )
 
-        BackHandler(enabled = hasFocus) {
-            textFieldState.edit { replace(0, length, "") }
-            focusManager.clearFocus()
-            keyboardController?.hide()
+        BackHandler(enabled = hasFocus || collapsing) {
+            collapseSearch()
+        }
+
+        LaunchedEffect(collapsing) {
+            if (collapsing) {
+                kotlinx.coroutines.delay(300)
+                collapsing = false
+            }
         }
 
         DisposableEffect(Unit) {
