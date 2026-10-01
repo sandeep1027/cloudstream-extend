@@ -18,4 +18,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "CloudStream"
-include(":app", ":shared", ":library", ":docs", ":desktopApp", ":plugins:torrin", ":plugins:torrin-mdblist", ":plugins:torrin-trakt")
+include(":app", ":shared", ":library", ":docs", ":desktopApp", ":plugins:torrin", ":plugins:torrin-mdblist", ":plugins:torrin-trakt", ":plugins:torrin-tmdb")

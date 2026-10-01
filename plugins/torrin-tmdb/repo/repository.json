@@ -1,0 +1,9 @@
+{
+  "iconUrl": null,
+  "name": "Torrin TMDB Extensions",
+  "description": "TMDB latest releases (India + Global) dashboard + Torrin/TorBox debrid playback for CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo/plugins.json"
+  ]
+}

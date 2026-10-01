@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo/TorrinTmdb.cs3",
+    "status": 1,
+    "version": "1",
+    "apiVersion": 1,
+    "name": "Torrin TMDB",
+    "internalName": "Torrin TMDB",
+    "authors": [
+      "rootx"
+    ],
+    "description": "Latest movies & shows from TMDB (India + Global, your TMDB key optional) plus curated trending rows. Streams via Torrin and TorBox debrid \u2014 pick the debrid per link.",
+    "repositoryUrl": null,
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "language": "en",
+    "iconUrl": null,
+    "fileSize": "56669",
+    "fileHash": "sha256-e874ca978c303a8596f2889ee24b4facb424a11cb44d008cb34eb84e80a62997"
+  }
+]

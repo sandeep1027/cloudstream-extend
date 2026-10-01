@@ -1,0 +1,6 @@
+{
+  "name": "Torrin TMDB",
+  "pluginClassName": "com.torrin.tmdb.TmdbPlugin",
+  "requiresResources": false,
+  "version": "1"
+}

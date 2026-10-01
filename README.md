@@ -16,6 +16,7 @@
 + **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer.
 + **Torrin MDBList extension (`plugins/torrin-mdblist/`):** "Latest Movies" / "Latest Shows" rows from the [MDBList](https://mdblist.com) catalog (free API key, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback.
 + **Torrin Trakt extension (`plugins/torrin-trakt/`):** "Latest Movies" / "Latest Episodes" rows from the public [Trakt](https://trakt.tv) calendar — no API keys — plus trending rows, with Torrin/TorBox debrid playback.
++ **Torrin TMDB extension (`plugins/torrin-tmdb/`):** "Latest Movies" / "Latest Shows" rows from [TMDB](https://www.themoviedb.org) Discover — both India-only and Global — plus trending rows. TMDB is used instead of MDBList here because its rate limits are per-second (not a small weekly unique-query cap), so the rows refresh daily without freezing. Per-debrid (Torrin/TorBox) playback links.
 + **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own key or leave blank to use the built-in shared key.
 
 ### Install the plugins
@@ -38,6 +39,12 @@ https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support
 
 ```
 https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo
+```
+
+**Torrin TMDB** (TMDB latest releases, India + Global — uses your TMDB key from Settings → Player → Metadata, or the built-in key; no MDBList quota):
+
+```
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo
 ```
 
 Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want.
