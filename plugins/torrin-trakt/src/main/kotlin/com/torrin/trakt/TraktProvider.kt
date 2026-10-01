@@ -26,8 +26,6 @@ import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.Mutex
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -80,17 +78,19 @@ class TraktProvider : MainAPI() {
             DATA_MOVIES -> Curated.MOVIES.map { it.toSearchResult(this) }
             DATA_TV -> Curated.TV.map { it.toSearchResult(this) }
             DATA_LATEST_MOVIES, DATA_LATEST_EPISODES ->
-                latestFromTrakt(request.data).map { it.toSearchResult(this) }
+                latestFromTrakt(request.data, page).map { it.toSearchResult(this) }
             else -> return null
         }
         if (items.isEmpty()) return null
-        return newHomePageResponse(request.name, items)
+        // Latest rows support pagination
+        val hasNext = request.data in listOf(DATA_LATEST_MOVIES, DATA_LATEST_EPISODES)
+        return newHomePageResponse(request.name, items, hasNext)
     }
 
     // --------------------------------------------- latest rows (Trakt)
     //
-    // Trakt's public this-week calendars. The results are cached in memory
-    // for CACHE_TTL so both rows share one request pair.
+    // Trakt's public this-week calendars. Fetches the requested page
+    // dynamically (no caching) so pagination returns fresh content.
 
     private data class LatestItem(
         val imdbId: String,
@@ -100,74 +100,48 @@ class TraktProvider : MainAPI() {
         val poster: String?
     )
 
-    /** Pair of (expiry timestamp, built rows). */
-    @Volatile
-    private var traktCache: Pair<Long, Map<String, List<LatestItem>>>? = null
-
-    // Both rows load in parallel when the home page renders; serialize the
-    // build so only the first row pays the two calendar requests.
-    private val traktBuildLock = Mutex()
-
-    private suspend fun latestFromTrakt(key: String): List<LatestItem> {
+    private suspend fun latestFromTrakt(key: String, page: Int): List<LatestItem> {
         // The Trakt calendar API needs a client id; without one the rows
         // simply stay hidden.
         if (traktClientId.isBlank()) return emptyList()
-        val cached = traktCache
-        if (cached != null && System.currentTimeMillis() < cached.first) {
-            return cached.second[key].orEmpty()
-        }
-        return traktBuildLock.withLock {
-            val fresh = traktCache
-            if (fresh != null && System.currentTimeMillis() < fresh.first) {
-                fresh.second[key].orEmpty()
-            } else {
-                val rows = buildTraktRows()
-                // An empty result is most likely a transient API hiccup:
-                // cache it for only a short time so it self-heals.
-                val ttl = if (rows.values.all { it.isEmpty() }) CACHE_TTL_EMPTY else CACHE_TTL
-                traktCache = Pair(System.currentTimeMillis() + ttl, rows)
-                rows[key].orEmpty()
+
+        return when (key) {
+            DATA_LATEST_MOVIES -> {
+                // This-week movie releases, deduped by IMDb id (a title can appear
+                // more than once in the week list).
+                val seenMovies = HashSet<String>()
+                traktMoviesPage(page)
+                    .mapNotNull { entry ->
+                        val movie = entry.movie ?: return@mapNotNull null
+                        val imdbId = movie.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
+                        val title = movie.title?.trim().orEmpty()
+                        if (title.isEmpty()) return@mapNotNull null
+                        LatestItem(imdbId, "movie", title, movie.year, posterOf(movie.images))
+                    }
+                    .filter { latest -> seenMovies.add(latest.imdbId) }
+                    .take(MAX_ROW_SIZE)
             }
+            DATA_LATEST_EPISODES -> {
+                // This-week episodes, grouped to one card per show.
+                val seenShows = HashSet<String>()
+                traktEpisodesPage(page)
+                    .mapNotNull { entry ->
+                        val show = entry.show ?: return@mapNotNull null
+                        val imdbId = show.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
+                        val title = show.title?.trim().orEmpty()
+                        if (title.isEmpty()) return@mapNotNull null
+                        LatestItem(imdbId, "tv", title, show.year, posterOf(show.images))
+                    }
+                    .filter { latest -> seenShows.add(latest.imdbId) }
+                    .take(MAX_ROW_SIZE)
+            }
+            else -> emptyList()
         }
     }
 
-    private suspend fun buildTraktRows(): Map<String, List<LatestItem>> {
-        // This-week movie releases, deduped by IMDb id (a title can appear
-        // more than once in the week list).
-        val seenMovies = HashSet<String>()
-        val movies = traktMoviesWeek()
-            .mapNotNull { entry ->
-                val movie = entry.movie ?: return@mapNotNull null
-                val imdbId = movie.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
-                val title = movie.title?.trim().orEmpty()
-                if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "movie", title, movie.year, posterOf(movie.images))
-            }
-            .filter { latest -> seenMovies.add(latest.imdbId) }
-            .take(MAX_ROW_SIZE)
-
-        // This-week episodes, grouped to one card per show.
-        val seenShows = HashSet<String>()
-        val shows = traktEpisodesWeek()
-            .mapNotNull { entry ->
-                val show = entry.show ?: return@mapNotNull null
-                val imdbId = show.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
-                val title = show.title?.trim().orEmpty()
-                if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "tv", title, show.year, posterOf(show.images))
-            }
-            .filter { latest -> seenShows.add(latest.imdbId) }
-            .take(MAX_ROW_SIZE)
-
-        return mapOf(
-            DATA_LATEST_MOVIES to movies,
-            DATA_LATEST_EPISODES to shows
-        )
-    }
-
-    private suspend fun traktMoviesWeek(): List<TraktMovieEntry> {
+    private suspend fun traktMoviesPage(page: Int): List<TraktMovieEntry> {
         val response = runCatching {
-            app.get(url = "$TRAKT_BASE/calendars/movies/this-week", headers = TRAKT_HEADERS)
+            app.get(url = "$TRAKT_BASE/calendars/movies/this-week?page=$page&limit=$MAX_ROW_SIZE", headers = TRAKT_HEADERS)
         }.getOrNull()
         if (response == null || !response.isSuccessful) return emptyList()
         return runCatching {
@@ -175,9 +149,9 @@ class TraktProvider : MainAPI() {
         }.getOrNull().orEmpty()
     }
 
-    private suspend fun traktEpisodesWeek(): List<TraktShowEntry> {
+    private suspend fun traktEpisodesPage(page: Int): List<TraktShowEntry> {
         val response = runCatching {
-            app.get(url = "$TRAKT_BASE/calendars/shows/this-week", headers = TRAKT_HEADERS)
+            app.get(url = "$TRAKT_BASE/calendars/shows/this-week?page=$page&limit=$MAX_ROW_SIZE", headers = TRAKT_HEADERS)
         }.getOrNull()
         if (response == null || !response.isSuccessful) return emptyList()
         return runCatching {
@@ -677,10 +651,6 @@ class TraktProvider : MainAPI() {
                 "trakt-api-key" to traktClientId
             )
 
-        /** Calendar rows live this long in memory before re-fetching. */
-        const val CACHE_TTL = 6 * 60 * 60 * 1000L // 6 h
-        /** Failed/empty builds are retried after this. */
-        const val CACHE_TTL_EMPTY = 10 * 60 * 1000L // 10 min
         const val MAX_ROW_SIZE = 24
         const val TYPE_TV = "TvSeries"
 

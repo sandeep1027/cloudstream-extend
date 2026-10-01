@@ -5,6 +5,8 @@ import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.metaproviders.mdblistApiKeyOverride
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbRegionOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbLanguageOverride
 import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
@@ -26,8 +28,6 @@ import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.Mutex
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -81,18 +81,20 @@ class MdblistProvider : MainAPI() {
             DATA_MOVIES -> Curated.MOVIES.map { it.toSearchResult(this) }
             DATA_TV -> Curated.TV.map { it.toSearchResult(this) }
             DATA_LATEST_MOVIES, DATA_LATEST_SHOWS ->
-                latestFromMdblist(request.data).map { it.toSearchResult(this) }
+                latestFromMdblist(request.data, page).map { it.toSearchResult(this) }
             else -> return null
         }
         if (items.isEmpty()) return null
-        return newHomePageResponse(request.name, items)
+        // Latest rows support pagination
+        val hasNext = request.data in listOf(DATA_LATEST_MOVIES, DATA_LATEST_SHOWS)
+        return newHomePageResponse(request.name, items, hasNext)
     }
 
     // ---------------------------------------------- latest rows (MDBList)
     //
     // MDBList catalog sorted by release date desc. Requires the user's free
-    // API key (Settings → Player → Metadata). The result is cached in memory
-    // for CACHE_TTL so the two rows share one request pair.
+    // API key (Settings → Player → Metadata). Fetches the requested page
+    // dynamically (no caching) so pagination returns fresh content.
 
     private data class LatestItem(
         val imdbId: String,
@@ -102,75 +104,22 @@ class MdblistProvider : MainAPI() {
         val poster: String?
     )
 
-    /** Pair of (expiry timestamp, built rows). */
-    @Volatile
-    private var mdblistCache: Pair<Long, Map<String, List<LatestItem>>>? = null
-
-    // Both rows load in parallel when the home page renders; serialize the
-    // build so only the first row pays the two catalog requests.
-    private val mdblistBuildLock = Mutex()
-
-    private suspend fun latestFromMdblist(key: String): List<LatestItem> {
+    private suspend fun latestFromMdblist(key: String, page: Int): List<LatestItem> {
         val apiKey = mdblistApiKeyOverride?.takeIf { it.isNotBlank() } ?: return emptyList()
-        val cached = mdblistCache
-        if (cached != null && System.currentTimeMillis() < cached.first) {
-            return cached.second[key].orEmpty()
+        val kind = when (key) {
+            DATA_LATEST_MOVIES -> "movie"
+            DATA_LATEST_SHOWS -> "show"
+            else -> return emptyList()
         }
-        return mdblistBuildLock.withLock {
-            val fresh = mdblistCache
-            if (fresh != null && System.currentTimeMillis() < fresh.first) {
-                fresh.second[key].orEmpty()
-            } else {
-                val rows = buildMdblistRows(apiKey)
-                if (rows == null) {
-                    // Request failed. Keep the previous (possibly stale) data
-                    // so the rows don't vanish on a transient error or quota
-                    // blip; extend its expiry for one more window.
-                    val previous = fresh
-                    if (previous != null) {
-                        mdblistCache = Pair(System.currentTimeMillis() + CACHE_TTL, previous.second)
-                    } else {
-                        mdblistCache = Pair(System.currentTimeMillis() + CACHE_TTL_EMPTY, emptyMap())
-                    }
-                    previous?.second?.get(key).orEmpty()
-                } else {
-                    // An empty result is most likely a transient API hiccup (or
-                    // a bad key): cache it for only a short time so it self-heals.
-                    val ttl = if (rows.values.all { it.isEmpty() }) CACHE_TTL_EMPTY else CACHE_TTL
-                    mdblistCache = Pair(System.currentTimeMillis() + ttl, rows)
-                    rows[key].orEmpty()
-                }
-            }
-        }
-    }
-
-    /**
-     * Returns null when the catalog requests failed outright (network/HTTP),
-     * an (empty) map otherwise.
-     */
-    private suspend fun buildMdblistRows(apiKey : String) : Map<String, List<LatestItem>>? {
-        val moviesRaw = fetchMdblistCatalog("movie", apiKey) ?: return null
-        val showsRaw = fetchMdblistCatalog("show", apiKey) ?: return null
-        val movies = moviesRaw
+        val items = fetchMdblistCatalog(kind, apiKey, page) ?: return emptyList()
+        return items
             .mapNotNull { item ->
                 val title = item.title?.trim().orEmpty()
                 val imdbId = item.imdbId ?: return@mapNotNull null
                 if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "movie", title, item.release_year, item.poster)
+                LatestItem(imdbId, kind, title, item.release_year, item.poster)
             }
             .take(MAX_ROW_SIZE)
-        val shows = showsRaw
-            .mapNotNull { item ->
-                val title = item.title?.trim().orEmpty()
-                val imdbId = item.imdbId ?: return@mapNotNull null
-                if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "tv", title, item.release_year, item.poster)
-            }
-            .take(MAX_ROW_SIZE)
-        return mapOf(
-            DATA_LATEST_MOVIES to movies,
-            DATA_LATEST_SHOWS to shows
-        )
     }
 
     /**
@@ -181,11 +130,11 @@ class MdblistProvider : MainAPI() {
      *
      * Returns null on network/HTTP/parse failure, an (empty) list on success.
      */
-    private suspend fun fetchMdblistCatalog(kind : String, apiKey : String) : List<MdblistItem>? {
+    private suspend fun fetchMdblistCatalog(kind: String, apiKey: String, page: Int): List<MdblistItem>? {
         val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
         val url = "$MDBLIST_BASE/catalog/$kind?apikey=${URLEncoder.encode(apiKey, "UTF-8")}" +
             "&sort=released&sort_order=desc&released_to=$today&limit=$MAX_ROW_SIZE" +
-            "&append_to_response=poster,description"
+            "&page=$page&append_to_response=poster,description"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
             ?: return null
         if (!response.isSuccessful) return null
@@ -670,10 +619,6 @@ class MdblistProvider : MainAPI() {
 
         const val MDBLIST_BASE = "https://api.mdblist.com"
 
-        /** MDBList rows live this long in memory before re-fetching. */
-        const val CACHE_TTL = 6 * 60 * 60 * 1000L // 6 h
-        /** Failed/empty builds are retried after this. */
-        const val CACHE_TTL_EMPTY = 10 * 60 * 1000L // 10 min
         const val MAX_ROW_SIZE = 24
         const val TYPE_TV = "TvSeries"
 
