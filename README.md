@@ -37,19 +37,19 @@ Settings → Extensions → Add repository — pick the repo for the extension y
 **Torrin** (Indian platform rows):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/torrin-support/plugins/torrin/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin/repo/repository.json
 ```
 
 **Torrin MDBList** (MDBList latest releases — needs your free MDBList API key in Settings → Player → Metadata):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-mdblist/repo/repository.json
 ```
 
 **Torrin Trakt** (Trakt calendar latest releases — needs your free Trakt client id in Settings → Player → Metadata):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-trakt/repo/repository.json
 ```
 
 Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. All three plugins above require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows).
