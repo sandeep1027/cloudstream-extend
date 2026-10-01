@@ -26,25 +26,25 @@ Settings → Extensions → Add repository — pick the repo for the extension y
 **Torrin** (Indian platform rows):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/torrin-support/plugins/torrin/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/torrin-support/plugins/torrin/repo/repository.json
 ```
 
 **Torrin MDBList** (MDBList latest releases — needs your free MDBList API key in Settings → Player → Metadata):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo/repository.json
 ```
 
 **Torrin Trakt** (Trakt calendar latest releases — no keys needed):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo/repository.json
 ```
 
 **Torrin TMDB** (TMDB latest releases, India + Global — uses your TMDB key from Settings → Player → Metadata, or the built-in key; no MDBList quota):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo/repository.json
 ```
 
 Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want.
