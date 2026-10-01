@@ -258,7 +258,7 @@ class HomeViewModel : ViewModel() {
                                 }
 
                                 this.list.list += newList.list
-                                this.list.list.distinctBy { it.url } // just to be sure we are not adding the same shit for some reason
+                                this.list.list = CopyOnWriteArrayList(this.list.list.distinctBy { it.url }) // just to be sure we are not adding the same shit for some reason
                             } ?: debugWarning {
                                 "Expanded an item not in main load named $key, current list is ${expandable.keys}"
                             }
