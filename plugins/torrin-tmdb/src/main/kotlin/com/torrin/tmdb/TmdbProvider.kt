@@ -68,13 +68,24 @@ class TmdbProvider : MainAPI() {
     // ----------------------------------------------------------------- pages
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
+        val latest = when (request.data) {
+            DATA_LATEST_MOVIES_IN -> "movie" to SCOPE_IN
+            DATA_LATEST_SHOWS_IN -> "tv" to SCOPE_IN
+            DATA_LATEST_MOVIES_GL -> "movie" to SCOPE_GLOBAL
+            DATA_LATEST_SHOWS_GL -> "tv" to SCOPE_GLOBAL
+            else -> null
+        }
+        if (latest != null) {
+            val (items, hasNext) = latestFromTmdb(latest.first, latest.second, page)
+            return newHomePageResponse(
+                request.name,
+                items.map { it.toSearchResult(this) },
+                hasNext
+            )
+        }
         val items: List<SearchResponse> = when (request.data) {
             DATA_MOVIES -> Curated.MOVIES.map { it.toSearchResult(this) }
             DATA_TV -> Curated.TV.map { it.toSearchResult(this) }
-            DATA_LATEST_MOVIES_IN -> latestFromTmdb("movie", SCOPE_IN).map { it.toSearchResult(this) }
-            DATA_LATEST_SHOWS_IN -> latestFromTmdb("tv", SCOPE_IN).map { it.toSearchResult(this) }
-            DATA_LATEST_MOVIES_GL -> latestFromTmdb("movie", SCOPE_GLOBAL).map { it.toSearchResult(this) }
-            DATA_LATEST_SHOWS_GL -> latestFromTmdb("tv", SCOPE_GLOBAL).map { it.toSearchResult(this) }
             else -> return null
         }
         if (items.isEmpty()) return null
@@ -83,9 +94,11 @@ class TmdbProvider : MainAPI() {
 
     // ------------------------------------------- latest rows (TMDB discover)
     //
-    // All four latest rows (movie/tv × India/Global) are built in one pass and
-    // cached in memory for CACHE_TTL, so when the home page renders only the
-    // first row pays the four Discover calls.
+    // Each latest row (movie/tv × India/Global) is backed by one in-memory
+    // state that accumulates TMDB Discover pages. Page 1 (the home row) is
+    // fetched when the home page renders; later pages (the row sheet's
+    // "load more" arrow) fetch the next Discover page and dedupe against
+    // every title already shown, so a title is never repeated.
 
     private data class LatestItem(
         val tmdbId: Int,
@@ -95,72 +108,90 @@ class TmdbProvider : MainAPI() {
         val poster: String?
     )
 
-    /** Pair of (expiry timestamp, rows keyed by "kind/scope"). */
-    @Volatile
-    private var tmdbLatestCache: Pair<Long, Map<String, List<LatestItem>>>? = null
+    /** Accumulated state of one latest row across its pages. */
+    private class LatestRowState(
+        var expiry: Long,
+        val seen: MutableSet<Int> = HashSet(),
+        val pages: MutableMap<Int, List<LatestItem>> = HashMap(),
+        var totalPages: Int = 0
+    )
 
-    private val tmdbLatestBuildLock = Mutex()
+    /** Rows keyed by "kind/scope". */
+    @Volatile
+    private var tmdbLatestCache: Map<String, LatestRowState> = emptyMap()
+
+    /** One mutex per row key so the four home rows build in parallel. */
+    private val tmdbRowLocks = HashMap<String, Mutex>()
+
+    private fun rowLock(key: String): Mutex = synchronized(tmdbRowLocks) {
+        tmdbRowLocks.getOrPut(key) { Mutex() }
+    }
 
     private fun keyOf(kind: String, scope: String) = "$kind/$scope"
 
-    private suspend fun latestFromTmdb(kind: String, scope: String): List<LatestItem> {
+    /**
+     * The slice of `page` (1-based) for a latest row, plus hasNext.
+     * Each page's slice is computed once and reused, so re-requesting a
+     * page never duplicates items.
+     */
+    private suspend fun latestFromTmdb(
+        kind: String, scope: String, page: Int
+    ): Pair<List<LatestItem>, Boolean> {
         val key = keyOf(kind, scope)
-        val cached = tmdbLatestCache
-        if (cached != null && System.currentTimeMillis() < cached.first) {
-            return cached.second[key].orEmpty()
-        }
-        return tmdbLatestBuildLock.withLock {
-            val fresh = tmdbLatestCache
-            if (fresh != null && System.currentTimeMillis() < fresh.first) {
-                fresh.second[key].orEmpty()
+        return rowLock(key).withLock {
+            val now = System.currentTimeMillis()
+            val previous = tmdbLatestCache[key]
+            val state = if (previous != null && now < previous.expiry) {
+                previous
             } else {
-                val rows = buildLatestRows()
-                // An all-empty result is most likely a transient TMDB/network
-                // hiccup: cache it briefly so it self-heals quickly.
-                val ttl = if (rows.values.any { it.isNotEmpty() }) CACHE_TTL else CACHE_TTL_EMPTY
-                tmdbLatestCache = Pair(System.currentTimeMillis() + ttl, rows)
-                rows[key].orEmpty()
+                val fresh = LatestRowState(expiry = now + CACHE_TTL)
+                val next = HashMap(tmdbLatestCache)
+                next[key] = fresh
+                tmdbLatestCache = next
+                fresh
             }
+            val slice = state.pages[page]
+            if (slice != null) {
+                return@withLock slice to hasNextOf(state, page)
+            }
+            val today = LocalDate.now(ZoneOffset.UTC).toString()
+            val response = runCatching { fetchTmdbDiscover(kind, scope, page, today) }.getOrNull()
+            if (response == null) {
+                // Transient network/HTTP failure: show nothing for this page
+                // (a later scroll expands again and retries).
+                return@withLock emptyList<LatestItem>() to false
+            }
+            if (state.totalPages == 0) {
+                state.totalPages = response.total_pages.coerceAtLeast(page)
+            }
+            val items = ArrayList<LatestItem>()
+            for (r in response.results) {
+                if (items.size >= MAX_ROW_SIZE) break
+                if (!state.seen.add(r.id)) continue
+                val title = (if (kind == "tv") r.name else r.title)?.trim().orEmpty()
+                if (title.isEmpty()) continue
+                val date = if (kind == "tv") r.first_air_date else r.release_date
+                items.add(
+                    LatestItem(
+                        r.id, kind, title,
+                        date?.substringBefore('-')?.toIntOrNull(),
+                        posterUrl(r.poster_path)
+                    )
+                )
+            }
+            state.pages[page] = items
+            // An empty first page is most likely a transient TMDB hiccup:
+            // retry sooner (and don't claim the row has no more pages).
+            if (page == 1 && items.isEmpty()) state.expiry = now + CACHE_TTL_EMPTY
+            items to hasNextOf(state, page)
         }
     }
 
-    /** Build all four latest rows (movie/tv × India/Global) in one pass. */
-    private suspend fun buildLatestRows(): Map<String, List<LatestItem>> {
-        val today = LocalDate.now(ZoneOffset.UTC).toString()
-
-        suspend fun build(kind: String, scope: String): List<LatestItem> {
-            val items = ArrayList<LatestItem>()
-            val seen = HashSet<Int>()
-            // Global benefits from a second page for a fuller pool.
-            val pages = if (scope == SCOPE_GLOBAL) 2 else 1
-            for (page in 1..pages) {
-                if (items.size >= MAX_ROW_SIZE) break
-                val results = runCatching { fetchTmdbDiscover(kind, scope, page, today) }
-                    .getOrNull()?.results.orEmpty()
-                for (r in results) {
-                    if (items.size >= MAX_ROW_SIZE) break
-                    if (!seen.add(r.id)) continue
-                    val title = (if (kind == "tv") r.name else r.title)?.trim().orEmpty()
-                    if (title.isEmpty()) continue
-                    val date = if (kind == "tv") r.first_air_date else r.release_date
-                    items.add(
-                        LatestItem(
-                            r.id, kind, title,
-                            date?.substringBefore('-')?.toIntOrNull(),
-                            posterUrl(r.poster_path)
-                        )
-                    )
-                }
-            }
-            return items.take(MAX_ROW_SIZE)
-        }
-
-        return mapOf(
-            keyOf("movie", SCOPE_IN) to build("movie", SCOPE_IN),
-            keyOf("tv", SCOPE_IN) to build("tv", SCOPE_IN),
-            keyOf("movie", SCOPE_GLOBAL) to build("movie", SCOPE_GLOBAL),
-            keyOf("tv", SCOPE_GLOBAL) to build("tv", SCOPE_GLOBAL)
-        )
+    private fun hasNextOf(state: LatestRowState, page: Int): Boolean {
+        if (state.totalPages > 0) return page < state.totalPages
+        // total_pages unknown (shouldn't happen after the first fetch):
+        // a full page means there is probably more.
+        return state.pages[page]?.size == MAX_ROW_SIZE
     }
 
     private fun posterUrl(path: String?): String? =

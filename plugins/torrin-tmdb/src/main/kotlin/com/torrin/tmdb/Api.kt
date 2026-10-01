@@ -86,7 +86,8 @@ data class TmdbMedia(
 /** TMDB Discover — latest releases (sorted by release/air date desc). */
 @Serializable
 data class TmdbDiscoverResponse(
-    val results: List<TmdbDiscoverItem> = emptyList()
+    val results: List<TmdbDiscoverItem> = emptyList(),
+    val total_pages: Int = 0
 )
 
 @Serializable
