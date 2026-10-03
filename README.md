@@ -29,6 +29,7 @@
 + **AniKoto extension (`plugins/anikoto/`):** [anikototv.to](https://anikototv.to) anime source — home rows, search, detail and episodes, sub/dub, and streams resolved through the site's two-step server chain, including MegaPlay's AES-encrypted source payloads.
 + **AnimeCube extension (`plugins/animecube/`):** [animecube.live](https://animecube.live) anime source — listings and episodes read from the site's Next.js data payload, streams from its sources endpoint with Dailymotion and Rumble playlists expanded into direct HLS/MP4.
 + **HDHub4u extension (`plugins/hdhub4u/`):** HDHub4u movies and series (Hindi/Hollywood) — home rows, search, detail with episodes, and stream extraction through the site's shortener/link-bypass hops.
++ **BollyFlix extension (`plugins/bollyflix/`):** the [BollyFlix](https://new.bollyflix.vote) catalogue (Bollywood, Hollywood, dual audio, Hindi-dubbed, Korean) — category rows, search and detail read from the site's WordPress REST API, including the per-title quality table (`2160p HEVC • 12GB`). The site itself only publishes **download** links, so this plugin is metadata-only: playback is resolved from the torrent layer and streamed through your **Torrin / TorBox / Real-Debrid** account (Settings → Player → Debrid), exactly like the Torrin extension.
 + **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own free TMDB key (get one at [themoviedb.org](https://www.themoviedb.org/settings/api)). The plugins require this key to fetch metadata (plot, posters, trending rows); without it, metadata enrichment is gracefully skipped.
 + **User-configurable TMDB region and language:** Settings → Player → Metadata — choose your region (e.g., India, United States) and language (e.g., Hindi, English) to get localized content, trending movies/shows, and metadata in your preferred language.
 + **Download manager:** download content for offline viewing with configurable parallel downloads, Wi-Fi-only mode, quality preference, and auto-delete after watching. Settings → Player → Downloads.
@@ -56,7 +57,7 @@ https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/to
 https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-trakt/repo/repository.json
 ```
 
-**HiAnime / AniKoto / AnimeCube / HDHub4u** (direct sources — no debrid, no API key). These four ship from the `providers` branch:
+**HiAnime / AniKoto / AnimeCube / HDHub4u** (direct sources — no debrid, no API key). These ship from the `providers` branch:
 
 ```
 https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/hianime/repo/repository.json
@@ -65,9 +66,15 @@ https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugi
 https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/hdhub4u/repo/repository.json
 ```
 
-Add each repo you want, then install the extension from it. The four are independent — a source going down only affects its own plugin.
+**BollyFlix** (catalogue only — playback goes through your debrid account, needs no API key):
 
-Then enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. The three Torrin plugins require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows); the four direct sources need no key and no debrid.
+```
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/bollyflix/repo/repository.json
+```
+
+Add each repo you want, then install the extension from it. They are independent — a source going down only affects its own plugin.
+
+Then enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. The three Torrin plugins require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows); the four direct sources need no key and no debrid. **BollyFlix needs a debrid account** (Torrin, TorBox or Real-Debrid) for playback, since the site only offers downloads.
 
 **One extra step:** the home screen only shows rows for ONE provider at a time. Tap the provider chip at the bottom of Home (it shows "None" by default) and pick the extension (e.g. "Torrin MDBList") — its rows then appear on Home.
 
