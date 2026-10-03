@@ -86,6 +86,8 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.debugAssert
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safe
+import com.lagradost.cloudstream3.torrin.DebridCache
+import com.lagradost.cloudstream3.torrin.RealDebrid
 import com.lagradost.cloudstream3.torrin.TorBox
 import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.CustomDecoder.Companion.fixSubtitleAlignment
@@ -111,6 +113,8 @@ import com.lagradost.cloudstream3.utils.SubtitleHelper.fromTagToLanguageName
 import com.lagradost.cloudstream3.utils.WIDEVINE_DRM_UUID
 import com.lagradost.cloudstream3.utils.videoskip.VideoSkipStamp
 import com.lagradost.cloudstream4.AppSettings
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import okhttp3.Interceptor
 import org.chromium.net.CronetEngine
@@ -1897,55 +1901,118 @@ class CS3IPlayer : IPlayer {
                         )
                     )
 
-                    // When a debrid service (Torrin / TorBox) is
+                    // When a debrid service (Torrin / TorBox / Real-Debrid) is
                     // configured, resolve the magnet through it first. A
                     // link may carry a `cs_debrid` hint (emitted by
                     // extensions that list one entry per debrid so the
                     // user can choose); the hinted service is tried first
-                    // and the other enabled service is the fallback. This
-                    // intentionally happens before the local torrent
-                    // consent check below, since a debrid does not start a
-                    // local torrent session. Only when every debrid fails
-                    // do we fall back to the local torrent flow, including
-                    // its consent rules.
+                    // and the other enabled services are the fallback.
+                    //
+                    // Parallel mode: When multiple debrids are enabled and no
+                    // hint is present, we race them in parallel and use
+                    // whichever completes first. This can significantly
+                    // reduce wait times when one service is faster.
                     val torrinEnabled = Torrin.isEnabled(context)
                     val torboxEnabled = TorBox.isEnabled(context)
-                    if (link.type == ExtractorLinkType.MAGNET && (torrinEnabled || torboxEnabled)) {
+                    val realDebridEnabled = RealDebrid.isEnabled(context)
+                    val anyDebridEnabled = torrinEnabled || torboxEnabled || realDebridEnabled
+                    if (link.type == ExtractorLinkType.MAGNET && anyDebridEnabled) {
                         ioSafe {
                             val debridHint = link.url
                                 .substringAfterLast("cs_debrid=", "")
                                 .substringBefore('&')
                                 .ifBlank { null }
                                 ?.lowercase()
-                            val attempts: List<Pair<String, suspend () -> ExtractorLink?>> = buildList {
-                                if (debridHint == "torbox" && torboxEnabled) {
-                                    add("TorBox" to { TorBox.transformLink(context, link) })
-                                }
-                                if (torrinEnabled) {
-                                    add("Torrin" to { Torrin.transformLink(context, link) })
-                                }
-                                if (debridHint != "torbox" && torboxEnabled) {
-                                    add("TorBox" to { TorBox.transformLink(context, link) })
-                                }
-                            }
+
+                            // Count enabled debrids for parallel decision
+                            val enabledDebrids = listOfNotNull(
+                                if (torrinEnabled) "torrin" else null,
+                                if (torboxEnabled) "torbox" else null,
+                                if (realDebridEnabled) "realdebrid" else null
+                            )
+
+                            // Determine if we should run in parallel (2+ enabled, no hint)
+                            val runParallel = enabledDebrids.size >= 2 && debridHint == null
+
                             var debridLink: ExtractorLink? = null
-                            for ((name, transform) in attempts) {
-                                val result = transform()
-                                if (result != null) {
-                                    debridLink = result
-                                    break
+
+                            if (runParallel) {
+                                // Parallel race: try all enabled, use first to succeed
+                                coroutineScope {
+                                    val deferreds = mutableListOf<kotlinx.coroutines.Deferred<ExtractorLink?>>()
+                                    if (torrinEnabled) {
+                                        deferreds.add(async { Torrin.transformLink(context, link) })
+                                    }
+                                    if (torboxEnabled) {
+                                        deferreds.add(async { TorBox.transformLink(context, link) })
+                                    }
+                                    if (realDebridEnabled) {
+                                        deferreds.add(async { RealDebrid.transformLink(context, link) })
+                                    }
+
+                                    // Wait for any to complete successfully
+                                    while (debridLink == null) {
+                                        for (deferred in deferreds) {
+                                            if (deferred.isCompleted) {
+                                                val result = try { deferred.await() } catch (e: Exception) { null }
+                                                if (result != null) {
+                                                    debridLink = result
+                                                    // Cancel all others
+                                                    deferreds.forEach { it.cancel() }
+                                                    break
+                                                }
+                                            }
+                                        }
+                                        if (debridLink != null) break
+                                        if (deferreds.all { it.isCompleted }) {
+                                            // All failed
+                                            break
+                                        }
+                                        kotlinx.coroutines.delay(100)
+                                    }
+                                    // Cancel any remaining
+                                    deferreds.forEach { it.cancel() }
+                                }
+                            } else {
+                                // Sequential: respect hint order
+                                val attempts: List<Pair<String, suspend () -> ExtractorLink?>> = buildList {
+                                    // If hint is specified, try that first
+                                    when (debridHint) {
+                                        "torbox" -> if (torboxEnabled) add("TorBox" to { TorBox.transformLink(context, link) })
+                                        "realdebrid" -> if (realDebridEnabled) add("RealDebrid" to { RealDebrid.transformLink(context, link) })
+                                        "torrin" -> if (torrinEnabled) add("Torrin" to { Torrin.transformLink(context, link) })
+                                        else -> {
+                                            // No hint, use default order
+                                            if (torrinEnabled) add("Torrin" to { Torrin.transformLink(context, link) })
+                                            if (torboxEnabled) add("TorBox" to { TorBox.transformLink(context, link) })
+                                            if (realDebridEnabled) add("RealDebrid" to { RealDebrid.transformLink(context, link) })
+                                        }
+                                    }
+                                    // Add remaining as fallbacks
+                                    if (debridHint != "torrin" && torrinEnabled) add("Torrin" to { Torrin.transformLink(context, link) })
+                                    if (debridHint != "torbox" && torboxEnabled) add("TorBox" to { TorBox.transformLink(context, link) })
+                                    if (debridHint != "realdebrid" && realDebridEnabled) add("RealDebrid" to { RealDebrid.transformLink(context, link) })
+                                }
+                                for ((name, transform) in attempts) {
+                                    val result = transform()
+                                    if (result != null) {
+                                        debridLink = result
+                                        break
+                                    }
                                 }
                             }
+
                             if (exoPlayer == null) return@ioSafe
+                            val finalLink = debridLink
                             runOnMainThread {
                                 if (exoPlayer == null) return@runOnMainThread
                                 when {
-                                    debridLink != null -> {
+                                    finalLink != null -> {
                                         // Release the local-torrent player before loading the
                                         // resolved direct URL (the exoPlayer setter asserts
                                         // against replacing a live player instance).
                                         releasePlayer()
-                                        loadOnlinePlayer(context, debridLink, retry = true)
+                                        loadOnlinePlayer(context, finalLink, retry = true)
                                     }
                                     Torrent.hasAcceptedTorrentForThisSession == false -> {
                                         val errorMessage =

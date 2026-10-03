@@ -64,6 +64,25 @@ var tmdbApiKeyOverride: String? = null
  */
 var mdblistApiKeyOverride: String? = null
 
+/**
+ * User supplied Trakt client id, set by the app layer from user settings
+ * (Settings -> Player -> Metadata). The public Trakt API requires it in the
+ * `trakt-api-key` header; blank means the feature is unavailable.
+ */
+var traktApiKeyOverride: String? = null
+
+/**
+ * User supplied TMDB region, set by the app layer from user settings
+ * (Settings -> Player -> Metadata -> TMDB Region). When null or blank, "US" is used as fallback.
+ */
+var tmdbRegionOverride: String? = null
+
+/**
+ * User supplied TMDB language, set by the app layer from user settings
+ * (Settings -> Player -> Metadata -> TMDB Language). When null or blank, "en-US" is used as fallback.
+ */
+var tmdbLanguageOverride: String? = null
+
 open class TmdbProvider : MainAPI() {
     // This should always be false, but might as well make it easier for forks
     open val includeAdult = false
@@ -82,6 +101,10 @@ open class TmdbProvider : MainAPI() {
         get() = tmdbApiKeyOverride?.takeIf { it.isNotBlank() }
             ?: "e6333b32409e02a4a6eba6fb7ff866bb"
     private val tmdbApiUrl = "https://api.themoviedb.org/3"
+    private val tmdbRegion: String
+        get() = tmdbRegionOverride?.takeIf { it.isNotBlank() } ?: "US"
+    private val tmdbLanguage: String
+        get() = tmdbLanguageOverride?.takeIf { it.isNotBlank() } ?: "en-US"
 
     @Serializable
     data class TmdbIds(
@@ -438,12 +461,12 @@ open class TmdbProvider : MainAPI() {
             },
             {
                 topMovies = parseJson<TmdbPageResult>(
-                    getApi("/movie/top_rated", mapOf("page" to "$page", "language" to "en-US", "region" to "US"))
+                    getApi("/movie/top_rated", mapOf("page" to "$page", "language" to tmdbLanguage, "region" to tmdbRegion))
                 ).results?.map { it.toSearchResponse() as MovieSearchResponse } ?: listOf()
             },
             {
                 topSeries = parseJson<TmdbPageResult>(
-                    getApi("/tv/top_rated", mapOf("page" to "$page", "language" to "en-US"))
+                    getApi("/tv/top_rated", mapOf("page" to "$page", "language" to tmdbLanguage))
                 ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
             },
         )
@@ -479,7 +502,7 @@ open class TmdbProvider : MainAPI() {
                     getApi(
                         "/tv/$id",
                         mapOf(
-                            "language" to "en-US",
+                            "language" to tmdbLanguage,
                             "append_to_response" to "external_ids,videos,credits,recommendations,similar,content_ratings",
                         )
                     )
@@ -490,7 +513,7 @@ open class TmdbProvider : MainAPI() {
                     getApi(
                         "/movie/$id",
                         mapOf(
-                            "language" to "en-US",
+                            "language" to tmdbLanguage,
                             "append_to_response" to "external_ids,videos,credits,recommendations,similar,release_dates",
                         )
                     )
@@ -526,7 +549,7 @@ open class TmdbProvider : MainAPI() {
                 mapOf(
                     "query" to query,
                     "page" to "$page",
-                    "language" to "en-US",
+                    "language" to tmdbLanguage,
                     "include_adult" to "$includeAdult",
                 )
             )

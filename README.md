@@ -1,10 +1,12 @@
 # CloudStream Extend
 
-**An unofficial fork of [CloudStream](https://github.com/recloudstream/cloudstream) with built-in debrid support (Torrin & TorBox) and a bundled Indian-content extension.**
+**An unofficial fork of [CloudStream](https://github.com/recloudstream/cloudstream) with built-in debrid support (Torrin, TorBox & Real-Debrid) and a bundled Indian-content extension.**
 
 > ⚠️ **Legal notice:** This project is a **fork** of [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream), which is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. The GPL license file is preserved in this repository (`LICENSE`). All original copyright belongs to the CloudStream authors and contributors. All modifications made in this fork are released under the same GPL-3.0 license.
 >
-> ⚠️ By default, the app doesn't provide any video sources; you have to install extensions to add functionality. This project does not host, stream, or provide any copyrighted media — playback is resolved through the user's own Torrin/TorBox accounts, and content sources come from community extensions.
+> ⚠️ By default, the app doesn't provide any video sources; you have to install extensions to add functionality. This project does not host, stream, or provide any copyrighted media — playback is resolved through the user's own Torrin/TorBox/Real-Debrid accounts, and content sources come from community extensions.
+>
+> ⚠️ **First-launch disclaimer:** On first launch the app presents a legal disclaimer that must be accepted before use. It explains that the app does not host content, that users are responsible for complying with their local laws, and that all content comes from third-party extensions. Declining exits the app.
 
 [![Discord](https://invidget.switchblade.xyz/5Hus6fM)](https://discord.gg/5Hus6fM)
 
@@ -12,12 +14,21 @@
 
 + **Torrin debrid integration (app core):** magnet links from any extension are resolved through your [Torrin](https://torrin.app) account into direct, signed HTTPS streams (no local torrent engine needed). Settings → Player → Debrid.
 + **TorBox debrid integration (app core):** same flow for [TorBox](https://torbox.app). Falls back Torrin → TorBox → local torrent automatically.
++ **Real-Debrid debrid integration (app core):** same flow for [Real-Debrid](https://real-debrid.com). Full support for magnet submission, file selection, and link unrestricting.
++ **Parallel debrid resolution:** when multiple debrid services are enabled, they run in parallel and use the first successful result for faster stream resolution.
++ **Smart caching:** in-memory cache with 2-hour TTL avoids repeated API calls for the same content, significantly improving performance.
++ **Retry logic with exponential backoff:** automatic retry (3 attempts) for transient API failures with exponential backoff (1s, 2s, 4s) for reliable operation.
++ **Debug logging:** centralized logging system with preference toggle (Settings → Player → Debrid → Debug logging) to monitor debrid operations.
++ **Test connection buttons:** verify your API credentials for Torrin, TorBox, and Real-Debrid directly from settings before use.
 + **Per-link debrid choice:** extensions can tag a magnet link with a debrid preference — links appear as "• Torrin • …" and "• TorBox • …" variants, the app tries the chosen debrid first and falls back to the other, so you pick which debrid plays each title.
-+ **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer.
-+ **Torrin MDBList extension (`plugins/torrin-mdblist/`):** "Latest Movies" / "Latest Shows" rows from the [MDBList](https://mdblist.com) catalog (free API key, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback.
-+ **Torrin Trakt extension (`plugins/torrin-trakt/`):** "Latest Movies" / "Latest Episodes" rows from the public [Trakt](https://trakt.tv) calendar — no API keys — plus trending rows, with Torrin/TorBox debrid playback.
-+ **Torrin TMDB extension (`plugins/torrin-tmdb/`):** "Latest Movies" / "Latest Shows" rows from [TMDB](https://www.themoviedb.org) Discover — both India-only and Global — plus trending rows. TMDB is used instead of MDBList here because its rate limits are per-second (not a small weekly unique-query cap), so the rows refresh daily without freezing. Per-debrid (Torrin/TorBox) playback links.
-+ **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own key or leave blank to use the built-in shared key.
++ **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer. Requires your TMDB API key for metadata.
++ **Torrin MDBList extension (`plugins/torrin-mdblist/`):** "Latest Movies" / "Latest Shows" rows from the [MDBList](https://mdblist.com) catalog (free API key, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback. Requires your TMDB API key for metadata.
++ **Torrin Trakt extension (`plugins/torrin-trakt/`):** "Latest Movies" / "Latest Episodes" rows from the public [Trakt](https://trakt.tv) calendar (free client id, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback. Requires your TMDB API key for metadata.
++ **Anime extension (`plugins/anime/`):** full [AniList](https://anilist.co) integration with GraphQL API for anime discovery and playback through debrid services.
++ **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own free TMDB key (get one at [themoviedb.org](https://www.themoviedb.org/settings/api)). The plugins require this key to fetch metadata (plot, posters, trending rows); without it, metadata enrichment is gracefully skipped.
++ **User-configurable TMDB region and language:** Settings → Player → Metadata — choose your region (e.g., India, United States) and language (e.g., Hindi, English) to get localized content, trending movies/shows, and metadata in your preferred language.
++ **Download manager:** download content for offline viewing with configurable parallel downloads, Wi-Fi-only mode, quality preference, and auto-delete after watching. Settings → Player → Downloads.
++ **Enhanced subtitle support:** auto-download subtitles from OpenSubtitles for downloaded content, with configurable language, size, color, outline, font, and sync offset. Settings → Player → Subtitles.
 
 ### Install the plugins
 
@@ -26,28 +37,22 @@ Settings → Extensions → Add repository — pick the repo for the extension y
 **Torrin** (Indian platform rows):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/torrin-support/plugins/torrin/repo/repository.json
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin/repo/repository.json
 ```
 
 **Torrin MDBList** (MDBList latest releases — needs your free MDBList API key in Settings → Player → Metadata):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/mdblist-support/plugins/torrin-mdblist/repo/repository.json
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-mdblist/repo/repository.json
 ```
 
-**Torrin Trakt** (Trakt calendar latest releases — no keys needed):
+**Torrin Trakt** (Trakt calendar latest releases — needs your free Trakt client id in Settings → Player → Metadata):
 
 ```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo/repository.json
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-trakt/repo/repository.json
 ```
 
-**Torrin TMDB** (TMDB latest releases, India + Global — uses your TMDB key from Settings → Player → Metadata, or the built-in key; no MDBList quota):
-
-```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/tmdb-support/plugins/torrin-tmdb/repo/repository.json
-```
-
-Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want.
+Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. All three plugins above require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows).
 
 **One extra step:** the home screen only shows rows for ONE provider at a time. Tap the provider chip at the bottom of Home (it shows "None" by default) and pick the extension (e.g. "Torrin MDBList") — its rows then appear on Home.
 
@@ -59,7 +64,7 @@ Prebuilt APKs are available on the [Releases page](https://github.com/sandeep102
 
 + Original app: [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream) (GPL-3.0) — all credit for the base application goes to the CloudStream team and its contributors.
 + Fork & debrid integrations: `sandeep1027` (this repository).
-+ Torrin API: [torrin.app](https://torrin.app) · TorBox API: [torbox.app](https://torbox.app) · TMDB data: [themoviedb.org](https://www.themoviedb.org/) (used per [their API terms](https://www.themoviedb.org/documentation/rules)).
++ Torrin API: [torrin.app](https://torrin.app) · TorBox API: [torbox.app](https://torbox.app) · Real-Debrid API: [real-debrid.com](https://real-debrid.com) · TMDB data: [themoviedb.org](https://www.themoviedb.org/) (used per [their API terms](https://www.themoviedb.org/documentation/rules)).
 
 ## License
 

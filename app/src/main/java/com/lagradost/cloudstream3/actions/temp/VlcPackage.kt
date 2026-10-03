@@ -8,13 +8,14 @@ import androidx.core.net.toUri
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.actions.OpenInAppAction
+import com.lagradost.cloudstream3.actions.buildHttpHeaderFields
 import com.lagradost.cloudstream3.actions.makeTempM3U8Intent
 import com.lagradost.cloudstream3.actions.updateDurationAndPosition
 import com.lagradost.cloudstream3.ui.result.LinkLoadingResult
 import com.lagradost.cloudstream3.ui.result.ResultEpisode
-import com.lagradost.cloudstream3.utils.txt
 import com.lagradost.cloudstream3.ui.subtitles.SUBTITLE_AUTO_SELECT_KEY
 import com.lagradost.cloudstream3.utils.DataStoreHelper.getViewPos
+import com.lagradost.cloudstream3.utils.txt
 
 // https://github.com/videolan/vlc-android/blob/3706c4be2da6800b3d26344fc04fab03ffa4b860/application/vlc-android/src/org/videolan/vlc/gui/video/VideoPlayerActivity.kt#L1898
 // https://wiki.videolan.org/Android_Player_Intents/
@@ -48,11 +49,15 @@ open class VlcPackage: OpenInAppAction(
         result: LinkLoadingResult,
         index: Int?
     ) {
+        val link = if (index != null) result.links.getOrNull(index) else result.links.firstOrNull()
+        if (link == null) return
+
         if (index != null) {
-            intent.setDataAndType(result.links[index].url.toUri(), "video/*")
+            intent.setDataAndType(link.url.toUri(), "video/*")
         } else {
             makeTempM3U8Intent(context, intent, result)
         }
+
         val position = getViewPos(video.id)?.position ?: 0L
 
         intent.putExtra("from_start", false)
@@ -60,11 +65,26 @@ open class VlcPackage: OpenInAppAction(
         intent.putExtra("secure_uri", true)
         intent.putExtra("title", video.name)
 
+        // Forward HTTP headers (Authorization, cookies, etc.) so signed URLs
+        // continue to work in VLC. VLC expects an ArrayList<String> of
+        // "Name: Value" pairs under the "http-header-fields" extra.
+        val headerFields = buildHttpHeaderFields(link.headers, link.referer)
+        if (headerFields.isNotEmpty()) {
+            intent.putStringArrayListExtra("http-header-fields", headerFields)
+        }
+
+        // Pass all subtitles so the user can switch between them in VLC.
+        // "subtitles_location" is used for the auto-selected default,
+        // "subs" (Uri[]) provides the full list.
         val subsLang = getKey<String>(SUBTITLE_AUTO_SELECT_KEY) ?: "en"
-        result.subs.firstOrNull {
-            subsLang == it.languageCode
-        }?.let {
-            intent.putExtra("subtitles_location", it.url)
+        val subsUris = result.subs.map { it.url.toUri() }.toTypedArray()
+        if (subsUris.isNotEmpty()) {
+            intent.putExtra("subs", subsUris)
+            val subNames = result.subs.map { it.originalName }.toTypedArray()
+            intent.putExtra("subs.name", subNames)
+            result.subs.firstOrNull { subsLang == it.languageCode }?.let {
+                intent.putExtra("subtitles_location", it.url)
+            }
         }
     }
 

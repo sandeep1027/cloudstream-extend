@@ -98,6 +98,7 @@ import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
+import com.lagradost.cloudstream3.utils.trakt.TraktScrobbleManager
 import com.lagradost.cloudstream3.ui.subtitles.SUBTITLE_AUTO_SELECT_KEY
 import com.lagradost.cloudstream3.ui.subtitles.SubtitlesFragment
 import com.lagradost.cloudstream3.ui.subtitles.SubtitlesFragment.Companion.getAutoSelectLanguageTagIETF
@@ -521,6 +522,24 @@ class GeneratorPlayer : FullScreenPlayer() {
         setTitle()
         if (!sameEpisode)
             hasRequestedStamps = false
+
+        // Notify Trakt scrobble manager that a new episode/movie is starting.
+        // sync.getSyncs() contains IMDB/TMDB/Trakt IDs when available.
+        val episode = currentMeta as? ResultEpisode
+        val response = viewModel.state.generatorState?.response
+        if (episode != null) {
+            val isMovie = response?.type?.isMovieType() == true
+            TraktScrobbleManager.onPlaybackStarted(
+                context = context,
+                syncData = HashMap(sync.getSyncs()),
+                title = response?.name ?: episode.headerName,
+                year = response?.year,
+                episodeMode = !isMovie,
+                episodeTitle = episode.name,
+                season = episode.season,
+                episode = episode.episode,
+            )
+        }
 
         loadExtractorJob(link.first)
         // load player
@@ -1715,6 +1734,7 @@ class GeneratorPlayer : FullScreenPlayer() {
     }
 
     override fun onDestroy() {
+        TraktScrobbleManager.onPlaybackStopped()
         ResultFragment.updateUI()
         currentVerifyLink?.cancel()
         super.onDestroy()
@@ -1730,6 +1750,11 @@ class GeneratorPlayer : FullScreenPlayer() {
         if ((currentMeta as? ResultEpisode)?.tvType == TvType.NSFW) return
 
         if (duration <= 0L) return // idk how you achieved this, but div by zero crash
+
+        // Forward position to Trakt scrobble manager (no-op if Trakt is not logged in).
+        val isPlayingNow = player.getIsPlaying()
+        TraktScrobbleManager.onPositionChanged(position, duration, isPlayingNow)
+
         if (!hasRequestedStamps) {
             hasRequestedStamps = true
             val fetchStamps = context?.let { ctx ->

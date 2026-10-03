@@ -1604,9 +1604,9 @@ object VideoDownloadManager {
 
             if (failedResults.isNotEmpty()) {
                 failedResults.forEach { (id, _) ->
-                    // TODO show a toast if some failed?
                     Log.e("FileDeletion", "Failed to delete file with ID: $id")
                 }
+                showToast(R.string.download_delete_failed)
             } else {
                 Log.i("FileDeletion", "All files deleted successfully")
             }

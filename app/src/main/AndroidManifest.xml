@@ -57,7 +57,9 @@
         <package android:name="dev.anilbeesetti.nextplayer" />
         <package android:name="com.instantbits.cast.webvideo" />
         <package android:name="com.gianlu.aria2android" />
-        
+        <package android:name="com.mxtech.videoplayer.ad" />
+        <package android:name="com.mxtech.videoplayer.pro" />
+
         <!-- Torrent clients -->
         <package android:name="org.proninyaroslav.libretorrent" />
         <package android:name="com.biglybt.android.client" />
@@ -256,6 +258,24 @@
         <receiver
             android:name=".receivers.PackageInstallerStatusReceiver"
             android:exported="false" />
+
+        <!-- Continue Watching home-screen widget -->
+        <receiver
+            android:name=".ui.widget.ContinueWatchingWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.lagradost.cloudstream3.widget.RESUME" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_continue_watching_info" />
+        </receiver>
+
+        <service
+            android:name=".ui.widget.ContinueWatchingWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
         <service
             android:name=".services.VideoDownloadService"

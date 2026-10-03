@@ -4,6 +4,8 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbRegionOverride
+import com.lagradost.cloudstream3.metaproviders.tmdbLanguageOverride
 import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
@@ -77,20 +79,19 @@ class TorrinProvider : MainAPI() {
             DATA_MOVIES -> Curated.MOVIES.map { it.toSearchResult(this) }
             DATA_TV -> Curated.TV.map { it.toSearchResult(this) }
             DATA_NETFLIX, DATA_HOTSTAR, DATA_ZEE5, DATA_SONYLIV ->
-                latestOnPlatform(request.data).map { it.toSearchResult(this) }
+                latestOnPlatform(request.data, page).map { it.toSearchResult(this) }
             else -> return null
         }
         if (items.isEmpty()) return null
-        return newHomePageResponse(request.name, items)
+        // Platform rows support pagination
+        val hasNext = request.data in listOf(DATA_NETFLIX, DATA_HOTSTAR, DATA_ZEE5, DATA_SONYLIV)
+        return newHomePageResponse(request.name, items, hasNext)
     }
 
     // ------------------------------------------- latest-per-platform rows
     //
-    // TMDB discover (latest releases, region IN) + a Watch Providers check per
-    // title (region IN) tells us which of the Indian platforms carry it. The
-    // result is cached in memory for PLATFORM_CACHE_TTL — the app's first open
-    // of any of the four rows pays ~80 TMDB calls once, then rows render from
-    // cache.
+    // TMDB discover (latest releases, region from user settings) + a Watch Providers check per
+    // title tells us which platforms carry it. Fetches the requested page dynamically.
 
     private data class PlatformItem(
         val tmdbId: Int,
@@ -100,116 +101,47 @@ class TorrinProvider : MainAPI() {
         val poster: String?
     )
 
-    @Volatile
-    private var platformCache: Triple<Long, Map<String, List<PlatformItem>>, Long>? = null
-
-    // All four platform rows load in parallel when the home page renders;
-    // serialize the expensive build so only the first row pays the TMDB cost.
-    private val platformBuildLock = kotlinx.coroutines.sync.Mutex()
-
-    private suspend fun latestOnPlatform(key: String): List<PlatformItem> {
-        val cached = platformCache
-        if (cached != null && System.currentTimeMillis() - cached.first < cached.third) {
-            return cached.second[key].orEmpty()
+    private suspend fun latestOnPlatform(key: String, page: Int): List<PlatformItem> {
+        val platformFilter = when (key) {
+            DATA_NETFLIX -> "8"
+            DATA_HOTSTAR -> "1899"
+            DATA_ZEE5 -> "2329"
+            DATA_SONYLIV -> "2836"
+            else -> return emptyList()
         }
-        return platformBuildLock.withLock {
-            val fresh = platformCache
-            if (fresh != null && System.currentTimeMillis() - fresh.first < fresh.third) {
-                fresh.second[key].orEmpty()
-            } else {
-                val rows = buildPlatformRows()
-                // An empty result is most likely a transient TMDB/network hiccup:
-                // cache it for only a short time so it self-heals quickly.
-                val ttl = if (rows.isEmpty()) PLATFORM_CACHE_TTL_EMPTY else PLATFORM_CACHE_TTL
-                platformCache = Triple(System.currentTimeMillis(), rows, ttl)
-                rows[key].orEmpty()
-            }
-        }
+
+        val movieItems = fetchPlatformItems("movie", platformFilter, page)
+        val tvItems = fetchPlatformItems("tv", platformFilter, page)
+        return movieItems + tvItems
     }
 
-    private suspend fun buildPlatformRows(): Map<String, List<PlatformItem>> {
-        // 1. Latest releases (2 pages each; date desc, minimum popularity).
-        val movieItems = ArrayList<PlatformItem>()
-        val tvItems = ArrayList<PlatformItem>()
-        for (page in 1..2) {
-            runCatching {
-                fetchTmdbDiscover("movie", page).results
-            }.getOrNull().orEmpty()
-                .takeIf { it.isNotEmpty() }
-                ?.let { res ->
-                    for (r in res) {
-                        val title = r.title?.trim().orEmpty()
-                        if (title.isEmpty()) continue
-                        movieItems.add(
-                            PlatformItem(
-                                r.id, "movie", title,
-                                r.release_date?.substringBefore('-')?.toIntOrNull(),
-                                posterUrl(r.poster_path)
-                            )
-                        )
-                    }
-                }
-            runCatching {
-                fetchTmdbDiscover("tv", page).results
-            }.getOrNull().orEmpty()
-                ?.let { res ->
-                    for (r in res) {
-                        val title = r.name?.trim().orEmpty()
-                        if (title.isEmpty()) continue
-                        tvItems.add(
-                            PlatformItem(
-                                r.id, "tv", title,
-                                r.first_air_date?.substringBefore('-')?.toIntOrNull(),
-                                posterUrl(r.poster_path)
-                            )
-                        )
-                    }
-                }
-        }
-        if (movieItems.isEmpty() && tvItems.isEmpty()) return emptyMap()
+    private suspend fun fetchPlatformItems(kind: String, providerId: String, page: Int): List<PlatformItem> {
+        val key = TMDB_API_KEY ?: return emptyList()
+        val region = tmdbRegionOverride?.takeIf { it.isNotBlank() } ?: "IN"
+        val language = tmdbLanguageOverride?.takeIf { it.isNotBlank() } ?: "en-US"
+        val dateField = if (kind == "tv") "first_air_date" else "primary_release_date"
 
-        // 2. Provider check per title, in parallel.
-        val candidates = movieItems + tvItems
-        val providersByTmdbId = coroutineScope {
-            candidates.map { item ->
-                async(Dispatchers.IO) {
-                    val names = runCatching { fetchTmdbWatchProviders(item.type, item.tmdbId) }
-                        .getOrNull()?.results
-                        ?.let { regions -> regions["IN"] ?: regions["US"] }
-                        ?.let { r -> r.flatrate + r.free }
-                        .orEmpty().map { it.provider_name.orEmpty().lowercase() }
-                        .toSet()
-                    item.tmdbId to names
-                }
-            }.awaitAll()
-        }
-        val rows = bucketPlatformItems(candidates, providersByTmdbId)
-        return rows
-    }
+        val url = "$TMDB_BASE/discover/$kind?api_key=$key" +
+            "&language=$language&region=$region&sort_by=$dateField.desc" +
+            "&vote_count.gte=10&with_watch_providers=$providerId&watch_region=$region&page=$page"
 
-    private fun bucketPlatformItems(
-        candidates: List<PlatformItem>,
-        providersByTmdbId: List<Pair<Int, Set<String>>>
-    ): Map<String, List<PlatformItem>> {
-        // Bucket by platform (name match — TMDB renames, e.g. "Disney+
-        // Hotstar" in IN).
-        val rows = HashMap<String, MutableList<PlatformItem>>()
-        val bucketOf = mapOf(
-            DATA_NETFLIX to { p: String -> p.contains("netflix") },
-            DATA_HOTSTAR to { p: String -> p.contains("hotstar") || p.contains("disney") },
-            DATA_ZEE5 to { p: String -> p.contains("zee5") || p.contains("zee 5") },
-            DATA_SONYLIV to { p: String -> p.contains("sony liv") || p.contains("sonyliv") }
-        )
-        providersByTmdbId.forEach { (tmdbId, names) ->
-            val item = candidates.firstOrNull { it.tmdbId == tmdbId } ?: return@forEach
-            for ((key, match) in bucketOf) {
-                if (names.any(match)) {
-                    rows.getOrPut(key) { ArrayList() }.add(item)
-                }
-            }
+        val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
+            ?: return emptyList()
+        if (!response.isSuccessful) return emptyList()
+
+        val discover = runCatching { AppUtils.parseJson<TmdbDiscoverResponse>(response.text) }.getOrNull()
+            ?: return emptyList()
+
+        return discover.results.mapNotNull { r ->
+            val title = (if (kind == "tv") r.name else r.title)?.trim().orEmpty()
+            if (title.isEmpty()) return@mapNotNull null
+            PlatformItem(
+                r.id, kind, title,
+                if (kind == "tv") r.first_air_date?.substringBefore('-')?.toIntOrNull()
+                else r.release_date?.substringBefore('-')?.toIntOrNull(),
+                posterUrl(r.poster_path)
+            )
         }
-        // Keep newest first (discover order is already date desc); cap row size.
-        return rows.mapValues { (_, list) -> list.take(MAX_PLATFORM_ROW_SIZE) }
     }
 
     private fun posterUrl(path: String?): String? =
@@ -458,7 +390,8 @@ class TorrinProvider : MainAPI() {
 
     private suspend fun fetchTmdbFind(tt: String): TmdbFindResponse? {
         // Maps an IMDb id to a TMDB id (+ cast). external_source=imdb_id.
-        val url = "$TMDB_BASE/find/$tt?api_key=$TMDB_API_KEY&external_source=imdb_id"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/find/$tt?api_key=$key&external_source=imdb_id"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbFindResponse>(response.text) }.getOrNull()
@@ -466,37 +399,17 @@ class TorrinProvider : MainAPI() {
 
     private suspend fun fetchTmdbMedia(kind: String, id: Int): TmdbMedia? {
         // kind = "movie" | "tv". Returns overview, poster_path, release date.
-        val url = "$TMDB_BASE/$kind/$id?api_key=$TMDB_API_KEY"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id?api_key=$key"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbMedia>(response.text) }.getOrNull()
     }
 
-    /** Latest releases, date desc (region IN, minimum vote count). */
-    private suspend fun fetchTmdbDiscover(kind: String, page: Int): TmdbDiscoverResponse {
-        val dateField = if (kind == "tv") "first_air_date" else "primary_release_date"
-        val url = "$TMDB_BASE/discover/$kind?api_key=$TMDB_API_KEY" +
-            "&language=en-US&region=IN&with_origin_country=IN&sort_by=$dateField.desc" +
-            "&vote_count.gte=10&page=$page"
-        val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
-        if (response == null || !response.isSuccessful) {
-            return TmdbDiscoverResponse()
-        }
-        return runCatching { AppUtils.parseJson<TmdbDiscoverResponse>(response.text) }.getOrNull()
-            ?: TmdbDiscoverResponse()
-    }
-
-    /** Which platforms carry a title in India (flatrate + free). */
-    private suspend fun fetchTmdbWatchProviders(kind: String, id: Int): TmdbWatchProvidersResponse? {
-        val url = "$TMDB_BASE/$kind/$id/watch/providers?api_key=$TMDB_API_KEY&watch_region=IN"
-        val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
-        if (response == null || !response.isSuccessful) return null
-        return runCatching { AppUtils.parseJson<TmdbWatchProvidersResponse>(response.text) }.getOrNull()
-    }
-
     /** TMDB id -> IMDb id (tt...). */
     private suspend fun fetchTmdbImdbId(kind: String, id: Int): String? {
-        val url = "$TMDB_BASE/$kind/$id/external_ids?api_key=$TMDB_API_KEY"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id/external_ids?api_key=$key"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbExternalIdsResponse>(response.text) }.getOrNull()
@@ -725,12 +638,12 @@ class TorrinProvider : MainAPI() {
         const val IMDB_SUGGEST = "https://v2.sg.media-imdb.com/suggestion/%s/%s.json"
         const val TORRENTIO_STREAM = "https://torrentio.strem.fun/stream/%s/%s.json"
 
-        // TMDB — metadata (plot/poster/year) source. Resolves IMDb ids and
-        // fetches overview + poster. Uses the user supplied key from settings
-        // (Settings -> Player -> Metadata) when present, else the built-in key.
-        const val DEFAULT_TMDB_API_KEY = "9f80b1a1a0112b04448d986f35313bbc"
-        val TMDB_API_KEY: String
-            get() = tmdbApiKeyOverride ?: DEFAULT_TMDB_API_KEY
+        // TMDB — metadata (plot/poster/year) source. Requires the user to
+        // supply their own key in Settings -> Player -> Metadata. Without a
+        // key all TMDB fetches return null and the plugin gracefully skips
+        // metadata enrichment.
+        val TMDB_API_KEY: String?
+            get() = tmdbApiKeyOverride?.takeIf { it.isNotBlank() }
         const val TMDB_BASE = "https://api.themoviedb.org/3"
         const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 

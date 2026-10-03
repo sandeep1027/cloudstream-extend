@@ -101,7 +101,7 @@ class PluginDetailsFragment(val data: PluginViewData) : BaseBottomSheetDialogFra
                     actionSettings.isVisible = true
                     actionSettings.setOnClickListener {
                         try {
-                            plugin.openSettings!!.invoke(requireContext())
+                            plugin.openSettings?.invoke(requireContext())
                         } catch (e: Throwable) {
                             Log.e(
                                 "PluginAdapter",

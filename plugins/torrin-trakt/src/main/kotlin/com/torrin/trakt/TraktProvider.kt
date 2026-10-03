@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.traktApiKeyOverride
 import com.lagradost.cloudstream3.ProviderType
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
@@ -25,19 +26,18 @@ import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.Mutex
 import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
  * Torrin Trakt — latest releases discovered through the public Trakt calendar,
- * with debrid playback. No API keys required.
+ * with debrid playback.
  *
  * Discovery:
  *  - Curated "Trending" dashboard rows (movies & TV) baked into the plugin
  *  - "Latest Movies" / "Latest Episodes" rows from the Trakt this-week
- *    calendars (https://trakt.tv) — public endpoints, no auth
+ *    calendars (https://trakt.tv) — the public API requires a client id
+ *    (Settings → Player → Metadata); without it these rows stay hidden
  *  - Live search through IMDB's public suggestion API (no key)
  *
  * Streams:
@@ -78,17 +78,19 @@ class TraktProvider : MainAPI() {
             DATA_MOVIES -> Curated.MOVIES.map { it.toSearchResult(this) }
             DATA_TV -> Curated.TV.map { it.toSearchResult(this) }
             DATA_LATEST_MOVIES, DATA_LATEST_EPISODES ->
-                latestFromTrakt(request.data).map { it.toSearchResult(this) }
+                latestFromTrakt(request.data, page).map { it.toSearchResult(this) }
             else -> return null
         }
         if (items.isEmpty()) return null
-        return newHomePageResponse(request.name, items)
+        // Latest rows support pagination
+        val hasNext = request.data in listOf(DATA_LATEST_MOVIES, DATA_LATEST_EPISODES)
+        return newHomePageResponse(request.name, items, hasNext)
     }
 
     // --------------------------------------------- latest rows (Trakt)
     //
-    // Trakt's public this-week calendars. The results are cached in memory
-    // for CACHE_TTL so both rows share one request pair.
+    // Trakt's public this-week calendars. Fetches the requested page
+    // dynamically (no caching) so pagination returns fresh content.
 
     private data class LatestItem(
         val imdbId: String,
@@ -98,71 +100,48 @@ class TraktProvider : MainAPI() {
         val poster: String?
     )
 
-    /** Pair of (expiry timestamp, built rows). */
-    @Volatile
-    private var traktCache: Pair<Long, Map<String, List<LatestItem>>>? = null
+    private suspend fun latestFromTrakt(key: String, page: Int): List<LatestItem> {
+        // The Trakt calendar API needs a client id; without one the rows
+        // simply stay hidden.
+        if (traktClientId.isBlank()) return emptyList()
 
-    // Both rows load in parallel when the home page renders; serialize the
-    // build so only the first row pays the two calendar requests.
-    private val traktBuildLock = Mutex()
-
-    private suspend fun latestFromTrakt(key: String): List<LatestItem> {
-        val cached = traktCache
-        if (cached != null && System.currentTimeMillis() < cached.first) {
-            return cached.second[key].orEmpty()
-        }
-        return traktBuildLock.withLock {
-            val fresh = traktCache
-            if (fresh != null && System.currentTimeMillis() < fresh.first) {
-                fresh.second[key].orEmpty()
-            } else {
-                val rows = buildTraktRows()
-                // An empty result is most likely a transient API hiccup:
-                // cache it for only a short time so it self-heals.
-                val ttl = if (rows.values.all { it.isEmpty() }) CACHE_TTL_EMPTY else CACHE_TTL
-                traktCache = Pair(System.currentTimeMillis() + ttl, rows)
-                rows[key].orEmpty()
+        return when (key) {
+            DATA_LATEST_MOVIES -> {
+                // This-week movie releases, deduped by IMDb id (a title can appear
+                // more than once in the week list).
+                val seenMovies = HashSet<String>()
+                traktMoviesPage(page)
+                    .mapNotNull { entry ->
+                        val movie = entry.movie ?: return@mapNotNull null
+                        val imdbId = movie.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
+                        val title = movie.title?.trim().orEmpty()
+                        if (title.isEmpty()) return@mapNotNull null
+                        LatestItem(imdbId, "movie", title, movie.year, posterOf(movie.images))
+                    }
+                    .filter { latest -> seenMovies.add(latest.imdbId) }
+                    .take(MAX_ROW_SIZE)
             }
+            DATA_LATEST_EPISODES -> {
+                // This-week episodes, grouped to one card per show.
+                val seenShows = HashSet<String>()
+                traktEpisodesPage(page)
+                    .mapNotNull { entry ->
+                        val show = entry.show ?: return@mapNotNull null
+                        val imdbId = show.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
+                        val title = show.title?.trim().orEmpty()
+                        if (title.isEmpty()) return@mapNotNull null
+                        LatestItem(imdbId, "tv", title, show.year, posterOf(show.images))
+                    }
+                    .filter { latest -> seenShows.add(latest.imdbId) }
+                    .take(MAX_ROW_SIZE)
+            }
+            else -> emptyList()
         }
     }
 
-    private suspend fun buildTraktRows(): Map<String, List<LatestItem>> {
-        // This-week movie releases, deduped by IMDb id (a title can appear
-        // more than once in the week list).
-        val seenMovies = HashSet<String>()
-        val movies = traktMoviesWeek()
-            .mapNotNull { entry ->
-                val movie = entry.movie ?: return@mapNotNull null
-                val imdbId = movie.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
-                val title = movie.title?.trim().orEmpty()
-                if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "movie", title, movie.year, posterOf(movie.images))
-            }
-            .filter { latest -> seenMovies.add(latest.imdbId) }
-            .take(MAX_ROW_SIZE)
-
-        // This-week episodes, grouped to one card per show.
-        val seenShows = HashSet<String>()
-        val shows = traktEpisodesWeek()
-            .mapNotNull { entry ->
-                val show = entry.show ?: return@mapNotNull null
-                val imdbId = show.ids?.imdb?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
-                val title = show.title?.trim().orEmpty()
-                if (title.isEmpty()) return@mapNotNull null
-                LatestItem(imdbId, "tv", title, show.year, posterOf(show.images))
-            }
-            .filter { latest -> seenShows.add(latest.imdbId) }
-            .take(MAX_ROW_SIZE)
-
-        return mapOf(
-            DATA_LATEST_MOVIES to movies,
-            DATA_LATEST_EPISODES to shows
-        )
-    }
-
-    private suspend fun traktMoviesWeek(): List<TraktMovieEntry> {
+    private suspend fun traktMoviesPage(page: Int): List<TraktMovieEntry> {
         val response = runCatching {
-            app.get(url = "$TRAKT_BASE/calendars/movies/this-week", headers = TRAKT_HEADERS)
+            app.get(url = "$TRAKT_BASE/calendars/movies/this-week?page=$page&limit=$MAX_ROW_SIZE", headers = TRAKT_HEADERS)
         }.getOrNull()
         if (response == null || !response.isSuccessful) return emptyList()
         return runCatching {
@@ -170,9 +149,9 @@ class TraktProvider : MainAPI() {
         }.getOrNull().orEmpty()
     }
 
-    private suspend fun traktEpisodesWeek(): List<TraktShowEntry> {
+    private suspend fun traktEpisodesPage(page: Int): List<TraktShowEntry> {
         val response = runCatching {
-            app.get(url = "$TRAKT_BASE/calendars/shows/this-week", headers = TRAKT_HEADERS)
+            app.get(url = "$TRAKT_BASE/calendars/shows/this-week?page=$page&limit=$MAX_ROW_SIZE", headers = TRAKT_HEADERS)
         }.getOrNull()
         if (response == null || !response.isSuccessful) return emptyList()
         return runCatching {
@@ -418,7 +397,8 @@ class TraktProvider : MainAPI() {
 
     private suspend fun fetchTmdbFind(tt: String): TmdbFindResponse? {
         // Maps an IMDb id to a TMDB id (+ cast). external_source=imdb_id.
-        val url = "$TMDB_BASE/find/$tt?api_key=$TMDB_API_KEY&external_source=imdb_id"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/find/$tt?api_key=$key&external_source=imdb_id"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbFindResponse>(response.text) }.getOrNull()
@@ -426,7 +406,8 @@ class TraktProvider : MainAPI() {
 
     private suspend fun fetchTmdbMedia(kind: String, id: Int): TmdbMedia? {
         // kind = "movie" | "tv". Returns overview, poster_path, release date.
-        val url = "$TMDB_BASE/$kind/$id?api_key=$TMDB_API_KEY"
+        val key = TMDB_API_KEY ?: return null
+        val url = "$TMDB_BASE/$kind/$id?api_key=$key"
         val response = runCatching { app.get(url = url, headers = HEADERS) }.getOrNull()
         if (response == null || !response.isSuccessful) return null
         return runCatching { AppUtils.parseJson<TmdbMedia>(response.text) }.getOrNull()
@@ -653,27 +634,35 @@ class TraktProvider : MainAPI() {
         const val DATA_LATEST_EPISODES = "trakt-latest-episodes"
 
         const val TRAKT_BASE = "https://api.trakt.tv"
-        val TRAKT_HEADERS = mapOf(
-            "User-Agent" to "TorrinTrakt/1.0 (CloudStream plugin)",
-            "Content-Type" to "application/json"
-        )
 
-        /** Calendar rows live this long in memory before re-fetching. */
-        const val CACHE_TTL = 6 * 60 * 60 * 1000L // 6 h
-        /** Failed/empty builds are retried after this. */
-        const val CACHE_TTL_EMPTY = 10 * 60 * 1000L // 10 min
+        /**
+         * The public Trakt API requires a registered client id in the
+         * `trakt-api-key` header (403 Forbidden otherwise). The id is
+         * configured by the user in Settings -> Player -> Metadata.
+         */
+        val traktClientId: String
+            get() = traktApiKeyOverride ?: ""
+
+        val TRAKT_HEADERS: Map<String, String>
+            get() = mapOf(
+                "User-Agent" to "TorrinTrakt/1.0 (CloudStream plugin)",
+                "Content-Type" to "application/json",
+                "trakt-api-version" to "2",
+                "trakt-api-key" to traktClientId
+            )
+
         const val MAX_ROW_SIZE = 24
         const val TYPE_TV = "TvSeries"
 
         const val IMDB_SUGGEST = "https://v2.sg.media-imdb.com/suggestion/%s/%s.json"
         const val TORRENTIO_STREAM = "https://torrentio.strem.fun/stream/%s/%s.json"
 
-        // TMDB — metadata (plot/poster/year) source. Uses the user supplied
-        // key from settings (Settings -> Player -> Metadata) when present,
-        // else the built-in key.
-        const val DEFAULT_TMDB_API_KEY = "9f80b1a1a0112b04448d986f35313bbc"
-        val TMDB_API_KEY: String
-            get() = tmdbApiKeyOverride ?: DEFAULT_TMDB_API_KEY
+        // TMDB — metadata (plot/poster/year) source. Requires the user to
+        // supply their own key in Settings -> Player -> Metadata. Without a
+        // key all TMDB fetches return null and the plugin gracefully skips
+        // metadata enrichment.
+        val TMDB_API_KEY: String?
+            get() = tmdbApiKeyOverride?.takeIf { it.isNotBlank() }
         const val TMDB_BASE = "https://api.themoviedb.org/3"
         const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 

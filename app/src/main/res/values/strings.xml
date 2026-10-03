@@ -199,6 +199,16 @@
     <string name="kitsu_settings">Show posters from Kitsu</string>
     <string name="show_cast_in_details">Show cast panel</string>
     <string name="pref_filter_search_quality">Hide selected video quality in search results</string>
+
+    <!-- Advanced search filter strings -->
+    <string name="search_filter_quality_label">Exclude quality</string>
+    <string name="search_filter_quality_hint">Selected qualities will be hidden</string>
+    <string name="search_filter_year_label">Release year</string>
+    <string name="search_filter_year_from">From</string>
+    <string name="search_filter_year_to">To</string>
+    <string name="search_filter_sort_label">Sort by</string>
+    <string name="sort_default">Default</string>
+    <string name="search_filter_reset_toast">Filters reset</string>
     <string name="automatic_plugin_updates">Automatic plugin updates</string>
     <string name="automatic_plugin_download">Automatically download plugins</string>
     <string name="automatic_plugin_download_mode_title">Select mode to filter plugins download</string>
@@ -389,6 +399,14 @@
     <string name="tmdb_api_key_des">Your own TheMovieDB API key (themoviedb.org → Settings → API). Leave empty to use the built-in shared key</string>
     <string name="mdblist_api_key">MDBList API key</string>
     <string name="mdblist_api_key_des">Free key from mdblist.com (account → Preferences). Required for the Torrin MDBList extension latest-releases rows. Leave empty to disable them</string>
+    <string name="trakt_api_key">Trakt client id</string>
+    <string name="trakt_api_key_des">Free client id from trakt.tv (Settings → API → Create New App). Required for the Torrin Trakt extension latest-rows. Leave empty to disable them</string>
+    <string name="trakt_scrobble_failed">Trakt scrobble failed</string>
+    <string name="download_delete_failed">Some downloads failed to delete</string>
+    <string name="tmdb_region">TMDB Region</string>
+    <string name="tmdb_region_des">Your region for localized content (e.g., IN for India, US for United States). Affects trending and popular content.</string>
+    <string name="tmdb_language">TMDB Language</string>
+    <string name="tmdb_language_des">Language for content metadata (e.g., en-US for English, hi-IN for Hindi). Affects titles and descriptions.</string>
     <string name="pref_category_player_layout">Layout</string>
     <string name="pref_category_defaults">Defaults</string>
     <string name="pref_category_looks">Looks</string>
@@ -813,4 +831,15 @@
         <item quantity="other">%d downloads queued</item>
     </plurals>
     <string name="player_is_live">Live</string>
+    <string name="disclaimer_accept">I Accept</string>
+    <string name="disclaimer_exit">Exit</string>
+    <string name="disclaimer_title">Important — Please Read</string>
+    <string name="disclaimer_must_accept">You must accept the disclaimer to use this app.</string>
+
+    <!-- Continue Watching home-screen widget -->
+    <string name="widget_continue_watching_title">Continue Watching</string>
+    <string name="widget_continue_watching_empty">Nothing to resume</string>
+    <string name="widget_continue_watching_description">Quick access to the shows and movies you were watching</string>
+    <string name="widget_continue_watching_poster_desc">Poster</string>
+    <string name="widget_continue_watching_episode_format" formatted="true">S%1$d E%2$d</string>
 </resources>

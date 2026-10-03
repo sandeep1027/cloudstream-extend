@@ -32,6 +32,8 @@ class AppSettings internal constructor(
     val backup = BackupPreferences(preferences)
     val plugins = PluginPreferences(preferences)
     val debrid = DebridPreferences(preferences)
+    val downloads = DownloadPreferences(preferences)
+    val subtitles = SubtitlePreferences(preferences)
 }
 
 class PluginPreferences(preferences: PreferenceStore) {
@@ -134,6 +136,17 @@ class UIPreferences(preferences: PreferenceStore) {
     val filterQuality = preferences.getEnumSet<SearchQuality>(
         "pref_filter_search_quality_key2", emptySet()
     )
+
+    /** Minimum release year shown in search results; null means no lower bound.
+     *  Stored as the raw int; -1 is the sentinel for "unset". */
+    val searchFilterYearMin = preferences.getInt("pref_search_filter_year_min", -1)
+
+    /** Maximum release year shown in search results; null means no upper bound.
+     *  Stored as the raw int; -1 is the sentinel for "unset". */
+    val searchFilterYearMax = preferences.getInt("pref_search_filter_year_max", -1)
+
+    /** Sort mode used for search results. Stored as the enum name. */
+    val searchFilterSortMode = preferences.getString("pref_search_filter_sort_mode", "DEFAULT")
 }
 
 class ProviderPreferences(preferences: PreferenceStore) {
@@ -163,6 +176,12 @@ class ProviderPreferences(preferences: PreferenceStore) {
      * Used by the Torrin MDBList extension for latest-releases rows.
      */
     val mdblistApiKey = preferences.getString("mdblist_api_key", "")
+
+    /**
+     * User supplied Trakt client id (free, from trakt.tv developer settings).
+     * Used by the Torrin Trakt extension for latest-releases rows.
+     */
+    val traktApiKey = preferences.getString("trakt_api_key", "")
 }
 
 class PlayerPreferences(preferences: PreferenceStore) {
@@ -195,6 +214,10 @@ class PlayerPreferences(preferences: PreferenceStore) {
     val bufferTimeSec = preferences.getInt("video_buffer_length_key", 0)
     val tvSeekOnTime = preferences.getInt("android_tv_interface_on_seek_key", 10)
     val tvSeekOffTime = preferences.getInt("android_tv_interface_off_seek_key", 10)
+
+    // TMDB region and language preferences for localized content
+    val tmdbRegion = preferences.getString("tmdb_region_key", "US")
+    val tmdbLanguage = preferences.getString("tmdb_language_key", "en-US")
 }
 
 class GeneralPreferences(preferences: PreferenceStore) {
@@ -216,10 +239,10 @@ class GeneralPreferences(preferences: PreferenceStore) {
 }
 
 /**
- * Debrid service settings. Torrin (https://torrin.app) and TorBox
- * (https://torbox.app): resolve magnet links into directly playable,
- * signed HTTPS streams instead of streaming them through the local torrent
- * engine.
+ * Debrid service settings. Torrin (https://torrin.app), TorBox
+ * (https://torbox.app), and Real-Debrid (https://real-debrid.com):
+ * resolve magnet links into directly playable, signed HTTPS streams
+ * instead of streaming them through the local torrent engine.
  */
 class DebridPreferences(preferences: PreferenceStore) {
     companion object {
@@ -235,6 +258,12 @@ class DebridPreferences(preferences: PreferenceStore) {
         val KEY_TORBOX_API_KEY = PreferenceData.privateKey("torbox_api_key_key")
         const val KEY_TORBOX_TIMEOUT_SECONDS = "torbox_timeout_seconds_key"
         const val DEFAULT_TORBOX_BASE_URL = "https://api.torbox.app/v1/api"
+
+        const val KEY_REALDEBRID_ENABLED = "realdebrid_enabled_key"
+        val KEY_REALDEBRID_API_KEY = PreferenceData.privateKey("realdebrid_api_key_key")
+        const val KEY_REALDEBRID_TIMEOUT_SECONDS = "realdebrid_timeout_seconds_key"
+
+        const val KEY_DEBUG_ENABLED = "debrid_debug_enabled"
     }
 
     val torrinEnabled = preferences.getBoolean(KEY_ENABLED, false)
@@ -245,4 +274,37 @@ class DebridPreferences(preferences: PreferenceStore) {
     val torboxEnabled = preferences.getBoolean(KEY_TORBOX_ENABLED, false)
     val torboxApiKey = preferences.getString(KEY_TORBOX_API_KEY)
     val torboxTimeoutSeconds = preferences.getInt(KEY_TORBOX_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
+
+    val realDebridEnabled = preferences.getBoolean(KEY_REALDEBRID_ENABLED, false)
+    val realDebridApiKey = preferences.getString(KEY_REALDEBRID_API_KEY)
+    val realDebridTimeoutSeconds = preferences.getInt(KEY_REALDEBRID_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
+
+    val debridDebugEnabled = preferences.getBoolean(KEY_DEBUG_ENABLED, false)
+}
+
+/**
+ * Download manager preferences
+ */
+class DownloadPreferences(preferences: PreferenceStore) {
+    val downloadEnabled = preferences.getBoolean("download_enabled_key", true)
+    val downloadOverWifiOnly = preferences.getBoolean("download_wifi_only_key", false)
+    val maxConcurrentDownloads = preferences.getInt("max_concurrent_downloads_key", 2)
+    val autoDeleteAfterWatch = preferences.getBoolean("auto_delete_after_watch_key", false)
+    val downloadQuality = preferences.getString("download_quality_key", "best")
+    val downloadPath = preferences.getString("download_path_key", "")
+}
+
+/**
+ * Subtitle preferences
+ */
+class SubtitlePreferences(preferences: PreferenceStore) {
+    val autoDownloadSubtitles = preferences.getBoolean("auto_download_subtitles_key", true)
+    val subtitleLanguage = preferences.getString("subtitle_language_key", "en")
+    val subtitleSize = preferences.getInt("subtitle_size_key", 16)
+    val subtitleColor = preferences.getInt("subtitle_color_key", -1) // -1 = white
+    val subtitleBackgroundColor = preferences.getInt("subtitle_bg_color_key", 0x80000000.toInt())
+    val subtitleOutlineColor = preferences.getInt("subtitle_outline_color_key", -16777216) // black
+    val subtitleOutlineWidth = preferences.getInt("subtitle_outline_width_key", 2)
+    val subtitleFont = preferences.getString("subtitle_font_key", "default")
+    val subtitleSyncOffset = preferences.getInt("subtitle_sync_offset_key", 0) // in milliseconds
 }

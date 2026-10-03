@@ -4,6 +4,6 @@
   "description": "Trakt calendar latest releases dashboard + Torrin/TorBox debrid playback for CloudStream",
   "manifestVersion": 1,
   "pluginLists": [
-    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/trakt-support/plugins/torrin-trakt/repo/plugins.json"
+    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-trakt/repo/plugins.json"
   ]
 }

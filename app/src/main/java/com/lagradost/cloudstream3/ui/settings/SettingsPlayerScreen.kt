@@ -1,12 +1,14 @@
 package com.lagradost.cloudstream3.ui.settings
 
 import android.text.format.Formatter.formatShortFileSize
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.integerArrayResource
@@ -16,6 +18,10 @@ import androidx.compose.ui.res.stringResource
 import com.lagradost.cloudstream3.CommonActivity.activity
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
+import com.lagradost.cloudstream3.torrin.DebridLogger
+import com.lagradost.cloudstream3.torrin.RealDebrid
+import com.lagradost.cloudstream3.torrin.TorBox
+import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.source_priority.QualityProfileDialog
 import com.lagradost.cloudstream3.ui.settings.SettingsFragment.Companion.getFolderSize
 import com.lagradost.cloudstream3.ui.subtitles.ChromecastSubtitlesFragment
@@ -30,6 +36,7 @@ import com.mihon.presentation.settings.Preference
 import com.mihon.presentation.settings.SearchableSettings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.reflect.jvm.jvmName
 
@@ -99,6 +106,19 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torrin_base_url),
                         subtitle = stringResource(R.string.torrin_base_url_des),
                     ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test Torrin Connection",
+                        subtitle = "Verify your Torrin API key",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = Torrin.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
                     Preference.PreferenceItem.SwitchPreference(
                         preference = settings.debrid.torboxEnabled,
                         title = stringResource(R.string.torbox_enabled),
@@ -110,6 +130,49 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torbox_api_key),
                         subtitle = stringResource(R.string.torbox_api_key_des),
                     ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test TorBox Connection",
+                        subtitle = "Verify your TorBox API key and show account info",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = TorBox.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.realDebridEnabled,
+                        title = "Real-Debrid",
+                        subtitle = "Enable Real-Debrid debrid service",
+                        icon = painterResource(R.drawable.dns_24px),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.debrid.realDebridApiKey,
+                        title = "Real-Debrid API Key",
+                        subtitle = "Your Real-Debrid API token",
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = "Test Real-Debrid Connection",
+                        subtitle = "Verify your Real-Debrid API key and show account info",
+                        icon = painterResource(R.drawable.dns_24px),
+                        onClick = {
+                            ioSafe {
+                                val (success, message) = RealDebrid.testConnection(context)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.debridDebugEnabled,
+                        title = "Debug Logging",
+                        subtitle = "Enable verbose logging for debrid services (check Logcat)",
+                        icon = painterResource(R.drawable.build_24px),
+                    ),
                 ),
             ),
             Preference.PreferenceGroup(
@@ -120,10 +183,65 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.tmdb_api_key),
                         subtitle = stringResource(R.string.tmdb_api_key_des),
                     ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.player.tmdbRegion,
+                        title = stringResource(R.string.tmdb_region),
+                        subtitle = stringResource(R.string.tmdb_region_des),
+                        entries = mapOf(
+                            "US" to "United States",
+                            "IN" to "India",
+                            "GB" to "United Kingdom",
+                            "CA" to "Canada",
+                            "AU" to "Australia",
+                            "DE" to "Germany",
+                            "FR" to "France",
+                            "ES" to "Spain",
+                            "IT" to "Italy",
+                            "JP" to "Japan",
+                            "KR" to "South Korea",
+                            "BR" to "Brazil",
+                            "MX" to "Mexico",
+                            "RU" to "Russia",
+                            "CN" to "China",
+                        ),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.player.tmdbLanguage,
+                        title = stringResource(R.string.tmdb_language),
+                        subtitle = stringResource(R.string.tmdb_language_des),
+                        entries = mapOf(
+                            "en-US" to "English (US)",
+                            "en-GB" to "English (UK)",
+                            "hi-IN" to "Hindi",
+                            "ta-IN" to "Tamil",
+                            "te-IN" to "Telugu",
+                            "ml-IN" to "Malayalam",
+                            "kn-IN" to "Kannada",
+                            "mr-IN" to "Marathi",
+                            "gu-IN" to "Gujarati",
+                            "bn-IN" to "Bengali",
+                            "pa-IN" to "Punjabi",
+                            "ur-IN" to "Urdu",
+                            "es-ES" to "Spanish",
+                            "fr-FR" to "French",
+                            "de-DE" to "German",
+                            "it-IT" to "Italian",
+                            "pt-BR" to "Portuguese (Brazil)",
+                            "ru-RU" to "Russian",
+                            "ja-JP" to "Japanese",
+                            "ko-KR" to "Korean",
+                            "zh-CN" to "Chinese (Simplified)",
+                        ),
+                    ),
                     Preference.PreferenceItem.EditTextPreference(
                         preference = settings.provider.mdblistApiKey,
                         title = stringResource(R.string.mdblist_api_key),
                         subtitle = stringResource(R.string.mdblist_api_key_des),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.traktApiKey,
+                        title = stringResource(R.string.trakt_api_key),
+                        subtitle = stringResource(R.string.trakt_api_key_des),
                     ),
                 ),
             ),
@@ -390,6 +508,84 @@ object SettingsPlayerScreen : SearchableSettings {
                                 cacheCleared += 1
                             }
                         })
+                )
+            ),
+
+            Preference.PreferenceGroup(
+                title = "Downloads",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.downloadEnabled,
+                        title = "Enable Downloads",
+                        subtitle = "Allow downloading content for offline viewing",
+                        icon = painterResource(R.drawable.ic_download),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.downloadOverWifiOnly,
+                        title = "Download over WiFi only",
+                        subtitle = "Only download when connected to WiFi",
+                        icon = painterResource(R.drawable.wifi_24px),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.downloads.maxConcurrentDownloads,
+                        title = "Max Concurrent Downloads",
+                        subtitle = "Number of downloads at the same time",
+                        icon = painterResource(R.drawable.download_24px),
+                        entries = mapOf(1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5"),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.downloads.autoDeleteAfterWatch,
+                        title = "Auto-delete after watching",
+                        subtitle = "Automatically delete downloads after you've watched them",
+                        icon = painterResource(R.drawable.ic_baseline_delete_outline_24),
+                    ),
+                )
+            ),
+
+            Preference.PreferenceGroup(
+                title = "Subtitles",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.subtitles.autoDownloadSubtitles,
+                        title = "Auto-download subtitles",
+                        subtitle = "Automatically download subtitles for downloaded content",
+                        icon = painterResource(R.drawable.subtitles_24px),
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = settings.subtitles.subtitleLanguage,
+                        title = "Subtitle language",
+                        subtitle = "Preferred language for subtitles",
+                        icon = painterResource(R.drawable.ic_baseline_language_24),
+                        entries = mapOf(
+                            "en" to "English",
+                            "hi" to "Hindi",
+                            "ta" to "Tamil",
+                            "te" to "Telugu",
+                            "ml" to "Malayalam",
+                            "kn" to "Kannada",
+                            "mr" to "Marathi",
+                            "gu" to "Gujarati",
+                            "bn" to "Bengali",
+                            "pa" to "Punjabi",
+                            "ur" to "Urdu",
+                            "es" to "Spanish",
+                            "fr" to "French",
+                            "de" to "German",
+                            "it" to "Italian",
+                            "pt" to "Portuguese",
+                            "ru" to "Russian",
+                            "ja" to "Japanese",
+                            "ko" to "Korean",
+                            "zh" to "Chinese",
+                        ),
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.subtitles.subtitleSize,
+                        title = "Subtitle size",
+                        subtitle = "Adjust subtitle text size",
+                        icon = painterResource(R.drawable.format_size_24px),
+                        valueRange = 12..32,
+                    ),
                 )
             ),
 

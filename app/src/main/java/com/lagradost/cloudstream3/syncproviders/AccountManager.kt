@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.syncproviders.providers.OpenSubtitlesApi
 import com.lagradost.cloudstream3.syncproviders.providers.SimklApi
 import com.lagradost.cloudstream3.syncproviders.providers.SubDlApi
 import com.lagradost.cloudstream3.syncproviders.providers.SubSourceApi
+import com.lagradost.cloudstream3.syncproviders.providers.TraktApi
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.videoskip.AnimeSkipAuth
 import java.util.concurrent.TimeUnit
@@ -23,6 +24,7 @@ abstract class AccountManager {
         val kitsuApi = KitsuApi()
         val aniListApi = AniListApi()
         val simklApi = SimklApi()
+        val traktApi = TraktApi()
         val localListApi = LocalList()
 
         val openSubtitlesApi = OpenSubtitlesApi()
@@ -67,6 +69,7 @@ abstract class AccountManager {
             SyncRepo(aniListApi),
             SyncRepo(simklApi),
             SyncRepo(localListApi),
+            PlainAuthRepo(traktApi),
             SubtitleRepo(openSubtitlesApi),
             SubtitleRepo(addic7ed),
             SubtitleRepo(subDlApi),
