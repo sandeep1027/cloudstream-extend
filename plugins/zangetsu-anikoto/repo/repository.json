@@ -1,0 +1,9 @@
+{
+  "iconUrl": null,
+  "name": "AniKoto",
+  "description": "AniKoto (anikototv.to) for CloudStream — ported from the Zangetsu provider repo",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/zangetsu-providers/plugins/zangetsu-anikoto/repo/plugins.json"
+  ]
+}

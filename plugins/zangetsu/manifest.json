@@ -1,6 +1,0 @@
-{
-  "name": "Zangetsu",
-  "pluginClassName": "com.zangetsu.cs3.ZangetsuPlugin",
-  "requiresResources": false,
-  "version": "1"
-}
