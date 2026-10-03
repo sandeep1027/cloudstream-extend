@@ -171,7 +171,9 @@ class HianimeProvider : MainAPI() {
                 return hit.second
             }
         }
-        val html = getText("$mainUrl/", "$mainUrl/") ?: return emptyList()
+        // The sections live on /home. The site root is a thin landing page with
+        // no cat-heading and no cards at all, so it yields no rows.
+        val html = getText("$mainUrl/home", "$mainUrl/") ?: return emptyList()
 
         val marks = ArrayList<Pair<String, Int>>()
         for (m in HEADING_RE.findAll(html)) {
