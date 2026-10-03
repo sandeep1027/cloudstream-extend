@@ -1,6 +1,0 @@
-{
-  "name": "AniKoto",
-  "pluginClassName": "com.zangetsu.cs3.AnikotoPlugin",
-  "requiresResources": false,
-  "version": "1"
-}

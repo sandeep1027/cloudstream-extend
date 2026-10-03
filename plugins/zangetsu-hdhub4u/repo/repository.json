@@ -1,9 +1,0 @@
-{
-  "iconUrl": null,
-  "name": "HDHub4u",
-  "description": "HDHub4u for CloudStream — ported from the Zangetsu provider repo",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/zangetsu-providers/plugins/zangetsu-hdhub4u/repo/plugins.json"
-  ]
-}

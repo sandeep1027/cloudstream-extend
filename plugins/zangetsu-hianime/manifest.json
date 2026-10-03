@@ -1,6 +1,0 @@
-{
-  "name": "HiAnime",
-  "pluginClassName": "com.zangetsu.cs3.HianimePlugin",
-  "requiresResources": false,
-  "version": "1"
-}

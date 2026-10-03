@@ -1,6 +1,0 @@
-{
-  "name": "HDHub4u",
-  "pluginClassName": "com.zangetsu.cs3.Hdhub4uPlugin",
-  "requiresResources": false,
-  "version": "1"
-}

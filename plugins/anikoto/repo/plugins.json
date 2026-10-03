@@ -1,0 +1,24 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/anikoto/repo/AniKoto.cs3",
+    "status": 1,
+    "version": "1",
+    "apiVersion": 1,
+    "name": "AniKoto",
+    "internalName": "AniKoto",
+    "authors": [
+      "Spyou",
+      "rootx"
+    ],
+    "description": "AniKoto (anikototv.to) anime source. Discovery via /filter and /home, detail and episodes from the ajax endpoints, streams resolved through the site's server chain including MegaPlay's AES-encrypted sources, with subtitle tracks.",
+    "repositoryUrl": null,
+    "tvTypes": [
+      "Anime",
+      "OVA"
+    ],
+    "language": "en",
+    "iconUrl": null,
+    "fileSize": "0",
+    "fileHash": "sha256-0000000000000000000000000000000000000000000000000000000000000000"
+  }
+]
