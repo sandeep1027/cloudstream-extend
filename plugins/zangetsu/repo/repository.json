@@ -1,0 +1,9 @@
+{
+  "iconUrl": null,
+  "name": "Zangetsu Providers",
+  "description": "Zangetsu anime sources ported to CloudStream (HiAnime, AniKoto, AnimeCube, HDHub4u)",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/zangetsu-providers/plugins/zangetsu/repo/plugins.json"
+  ]
+}
