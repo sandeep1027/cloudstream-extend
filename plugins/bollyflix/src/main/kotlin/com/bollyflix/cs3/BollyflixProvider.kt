@@ -26,6 +26,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
@@ -238,16 +239,59 @@ class BollyflixProvider : MainAPI() {
 
     // ------------------------------------------------------ wordpress api
 
-    /** One page of posts for an already-built query fragment, or null on failure. */
+    /**
+     * The host sits behind a CDN that resets bursts, and the app fires every
+     * home row at once (APIRepository.getMainPage awaits them concurrently).
+     * Serialising the list requests keeps one home load from turning into five
+     * simultaneous multi-megabyte requests that all get dropped.
+     */
+    private val postsLock = Mutex()
+
+    /** query|page -> (fetched at, posts), so a rate-limited host is hit once. */
+    private val listCache = ConcurrentHashMap<String, Pair<Long, List<WpPost>>>()
+
+    /**
+     * GET with retries and real spacing. This CDN resets a large share of
+     * requests from a busy client no matter how small they are, so a row that
+     * comes back empty once is what makes a provider look permanently dead.
+     */
+    private suspend fun getText(url: String, attempts: Int = LIST_ATTEMPTS): String? {
+        repeat(attempts) { attempt ->
+            val response = runCatching {
+                postsLock.withLock { app.get(url = url, headers = HEADERS) }
+            }.getOrNull()
+            if (response != null && response.isSuccessful) {
+                val body = runCatching { response.text }.getOrNull()
+                if (!body.isNullOrBlank()) return body
+            }
+            if (attempt < attempts - 1) delay(RETRY_DELAY_MS * (attempt + 1) * (attempt + 1))
+        }
+        return null
+    }
+
+    /**
+     * One page of posts for an already-built query fragment, or null on failure.
+     *
+     * Results are cached briefly: the home screen asks for the same five rows
+     * on every launch, and each miss costs another request into a rate limiter
+     * that is already the flakiest part of this host.
+     */
     private suspend fun fetchPosts(query: String, page: Int): List<WpPost>? {
-        val response = runCatching {
-            app.get(
-                url = "$WP_POSTS?$query&per_page=$PER_PAGE&page=$page&_embed=1",
-                headers = HEADERS
-            )
-        }.getOrNull()
-        if (response == null || !response.isSuccessful) return null
-        return runCatching { parseJson<List<WpPost>>(response.text) }.getOrNull()
+        val key = "$query|$page"
+        val now = System.currentTimeMillis()
+        listCache[key]?.let { (at, posts) ->
+            if (now - at < LIST_CACHE_TTL_MS) {
+                posts.forEach { remember(it) }
+                return posts
+            }
+        }
+
+        val url = "$WP_POSTS?$query&per_page=$PER_PAGE&page=$page&$LIST_FIELDS"
+        val body = getText(url) ?: return null
+        val posts = runCatching { parseJson<List<WpPost>>(body) }.getOrNull() ?: return null
+        posts.forEach { remember(it) }
+        if (listCache.size < MAX_LIST_CACHE) listCache[key] = now to posts
+        return posts
     }
 
     private suspend fun resolvePost(slug: String): WpPost? {
@@ -287,7 +331,9 @@ class BollyflixProvider : MainAPI() {
                 return@withLock
             }
             val response = runCatching {
-                app.get(url = "$WP_CATEGORIES?per_page=100&hide_empty=1", headers = HEADERS)
+                postsLock.withLock {
+                    app.get(url = "$WP_CATEGORIES?per_page=100&hide_empty=1", headers = HEADERS)
+                }
             }.getOrNull()
             if (response == null || !response.isSuccessful) return@withLock
             val categories = runCatching { parseJson<List<WpCategory>>(response.text) }.getOrNull()
@@ -722,6 +768,25 @@ class BollyflixProvider : MainAPI() {
 
         const val MOVIE_PREFIX = "m:"
         const val PER_PAGE = 20
+
+        /**
+         * Home rows and search only need card fields. `_embed=1` inlines the
+         * whole rendered post for every row — 2.4 MB for 20 results — while
+         * embedding only the featured media and dropping the unused keys
+         * returns the same data in a fraction of the size, which matters on a
+         * CDN that resets large responses.
+         */
+        const val LIST_FIELDS =
+            "_embed=wp:featuredmedia" +
+                "&_fields=id,date,slug,link,title,categories,tags,featured_media,_embedded"
+
+        /** The CDN drops a share of requests outright; spaced retries ride it out. */
+        const val LIST_ATTEMPTS = 4
+        const val RETRY_DELAY_MS = 700L
+
+        /** How long a fetched row/page is reused before asking again. */
+        const val LIST_CACHE_TTL_MS = 10 * 60 * 1000L
+        const val MAX_LIST_CACHE = 60
         const val MAX_MOVIE_LINKS = 12
         const val MAX_EPISODES = 500
         const val MAX_QUALITY_ROWS = 12
