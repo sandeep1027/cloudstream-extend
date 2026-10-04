@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "CloudStream"
-include(":app", ":shared", ":library", ":docs", ":desktopApp", ":plugins:torrin", ":plugins:torrin-mdblist", ":plugins:torrin-trakt", ":plugins:anime", ":plugins:hianime", ":plugins:anikoto", ":plugins:animecube", ":plugins:hdhub4u", ":plugins:bollyflix")
+include(":app", ":shared", ":library", ":docs", ":desktopApp", ":plugins:torrin", ":plugins:torrin-mdblist", ":plugins:torrin-trakt", ":plugins:anime", ":plugins:hianime", ":plugins:anikoto", ":plugins:animecube", ":plugins:hdhub4u", ":plugins:bollyflix", ":plugins:yts")

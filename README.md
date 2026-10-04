@@ -30,6 +30,7 @@
 + **AnimeCube extension (`plugins/animecube/`):** [animecube.live](https://animecube.live) anime source — listings and episodes read from the site's Next.js data payload, streams from its sources endpoint with Dailymotion and Rumble playlists expanded into direct HLS/MP4.
 + **HDHub4u extension (`plugins/hdhub4u/`):** HDHub4u movies and series (Hindi/Hollywood) — home rows, search, detail with episodes, and stream extraction through the site's shortener/link-bypass hops.
 + **BollyFlix extension (`plugins/bollyflix/`):** the [BollyFlix](https://new.bollyflix.vote) catalogue (Bollywood, Hollywood, dual audio, Hindi-dubbed, Korean) — category rows, search and detail read from the site's WordPress REST API, including the per-title quality table (`2160p HEVC • 12GB`). The site itself only publishes **download** links, so this plugin is metadata-only: playback is resolved from the torrent layer and streamed through your **Torrin / TorBox / Real-Debrid** account (Settings → Player → Debrid), exactly like the Torrin extension.
++ **YTS extension (`plugins/yts/`):** [YTS](https://en.yts.lu) movies and TV shows — browse and search come from the site's TMDB-backed API, with home rows per streaming service (**Netflix, Prime Video, Disney+, Max, Hulu**, plus the TV equivalents), freshness windows (**This Week**, **Today**), regional rows (**Indian** movies and shows), genres and the usual Popular / Top Rated shelves. Every link is a magnet labelled with quality, size, seeders and tracker (`2160p • 20.32 GB • 234 seeders`), so playback needs a debrid account. Sites in this family move domains often, which is why it is a standalone plugin that can be pointed at a new mirror without touching the others.
 + **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own free TMDB key (get one at [themoviedb.org](https://www.themoviedb.org/settings/api)). The plugins require this key to fetch metadata (plot, posters, trending rows); without it, metadata enrichment is gracefully skipped.
 + **User-configurable TMDB region and language:** Settings → Player → Metadata — choose your region (e.g., India, United States) and language (e.g., Hindi, English) to get localized content, trending movies/shows, and metadata in your preferred language.
 + **Download manager:** download content for offline viewing with configurable parallel downloads, Wi-Fi-only mode, quality preference, and auto-delete after watching. Settings → Player → Downloads.
@@ -72,9 +73,15 @@ https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugi
 https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/bollyflix/repo/repository.json
 ```
 
+**YTS** (torrents — playback goes through your debrid account, needs no API key):
+
+```
+https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/yts/repo/repository.json
+```
+
 Add each repo you want, then install the extension from it. They are independent — a source going down only affects its own plugin.
 
-Then enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. The three Torrin plugins require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows); the four direct sources need no key and no debrid. **BollyFlix needs a debrid account** (Torrin, TorBox or Real-Debrid) for playback, since the site only offers downloads.
+Then enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. The three Torrin plugins require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows); the four direct sources need no key and no debrid. **BollyFlix and YTS need a debrid account** (Torrin, TorBox or Real-Debrid) for playback, since neither site serves video itself.
 
 **One extra step:** the home screen only shows rows for ONE provider at a time. Tap the provider chip at the bottom of Home (it shows "None" by default) and pick the extension (e.g. "Torrin MDBList") — its rows then appear on Home.
 

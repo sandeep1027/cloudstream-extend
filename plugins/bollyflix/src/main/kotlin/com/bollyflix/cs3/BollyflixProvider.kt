@@ -264,7 +264,7 @@ class BollyflixProvider : MainAPI() {
                 val body = runCatching { response.text }.getOrNull()
                 if (!body.isNullOrBlank()) return body
             }
-            if (attempt < attempts - 1) delay(RETRY_DELAY_MS * (attempt + 1) * (attempt + 1))
+            if (attempt < attempts - 1) delay(RETRY_DELAY_MS * (attempt + 1))
         }
         return null
     }
@@ -780,9 +780,13 @@ class BollyflixProvider : MainAPI() {
             "_embed=wp:featuredmedia" +
                 "&_fields=id,date,slug,link,title,categories,tags,featured_media,_embedded"
 
-        /** The CDN drops a share of requests outright; spaced retries ride it out. */
-        const val LIST_ATTEMPTS = 4
-        const val RETRY_DELAY_MS = 700L
+        /**
+         * The CDN drops a share of requests outright, so retry — but keep the
+         * spacing short: five home rows are fetched one after another, and the
+         * home screen is on the launch path.
+         */
+        const val LIST_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 400L
 
         /** How long a fetched row/page is reused before asking again. */
         const val LIST_CACHE_TTL_MS = 10 * 60 * 1000L
