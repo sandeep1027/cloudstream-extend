@@ -38,8 +38,15 @@ import java.io.IOException
 import java.io.InputStreamReader
 
 object InAppUpdater {
-    private const val GITHUB_USER_NAME = "recloudstream"
-    private const val GITHUB_REPO = "cloudstream"
+    /**
+     * Where in-app updates are fetched from. Pointing this at the fork means
+     * "check for updates" offers our own release APKs instead of upstream's.
+     * The release's asset must be an .apk whose name carries a x.y.z version,
+     * e.g. app-stable-4.9.3.apk, and prereleases are read from the
+     * `pre-release` git tag.
+     */
+    private const val GITHUB_USER_NAME = "sandeep1027"
+    private const val GITHUB_REPO = "cloudstream-extend"
 
     private const val PRERELEASE_PACKAGE_NAME = "com.lagradost.cloudstream3.prerelease"
     private const val LOG_TAG = "InAppUpdater"
