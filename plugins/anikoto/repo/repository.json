@@ -1,9 +1,0 @@
-{
-  "iconUrl": null,
-  "name": "AniKoto",
-  "description": "AniKoto (anikototv.to) for CloudStream ",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/anikoto/repo/plugins.json"
-  ]
-}

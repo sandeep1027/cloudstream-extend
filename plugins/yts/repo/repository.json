@@ -1,9 +1,0 @@
-{
-  "iconUrl": null,
-  "name": "YTS",
-  "description": "YTS movies and TV shows (720p / 1080p / 2160p) for CloudStream — playback resolved through your Torrin / TorBox / Real-Debrid account",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/yts/repo/plugins.json"
-  ]
-}

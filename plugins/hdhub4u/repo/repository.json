@@ -1,9 +1,0 @@
-{
-  "iconUrl": null,
-  "name": "HDHub4u",
-  "description": "HDHub4u for CloudStream ",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/providers/plugins/hdhub4u/repo/plugins.json"
-  ]
-}
