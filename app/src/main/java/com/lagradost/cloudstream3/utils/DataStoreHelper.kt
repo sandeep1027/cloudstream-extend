@@ -131,7 +131,13 @@ object DataStoreHelper {
 
     private var homePreferenceStrings: List<String> by UserPreferenceDelegate(
         "home_pref_homepage",
-        listOf(TvType.Movie, TvType.TvSeries).map { it.name })
+        // Anime is on by default because this fork's direct sources are anime
+        // only: with it off, the provider picker hides them (a provider shows up
+        // only when one of its types is selected) and they look like they are not
+        // installed. These chips filter the picker, not the home rows, so nothing
+        // else moves. validateChips still hides the chip when no installed
+        // provider serves anime.
+        listOf(TvType.Movie, TvType.TvSeries, TvType.Anime).map { it.name })
 
     var homePreference: List<TvType>
         get() = deserializeTv(homePreferenceStrings)
