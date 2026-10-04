@@ -1,6 +1,6 @@
 # CloudStream Extend
 
-**An unofficial fork of [CloudStream](https://github.com/recloudstream/cloudstream) with built-in debrid support (Torrin, TorBox & Real-Debrid) and a bundled Indian-content extension.**
+**An unofficial fork of [CloudStream](https://github.com/recloudstream/cloudstream) with built-in debrid support (Torrin, TorBox & Real-Debrid).**
 
 > ⚠️ **Legal notice:** This project is a **fork** of [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream), which is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. The GPL license file is preserved in this repository (`LICENSE`). All original copyright belongs to the CloudStream authors and contributors. All modifications made in this fork are released under the same GPL-3.0 license.
 >
@@ -21,10 +21,7 @@
 + **Debug logging:** centralized logging system with preference toggle (Settings → Player → Debrid → Debug logging) to monitor debrid operations.
 + **Test connection buttons:** verify your API credentials for Torrin, TorBox, and Real-Debrid directly from settings before use.
 + **Per-link debrid choice:** extensions can tag a magnet link with a debrid preference — links appear as "• Torrin • …" and "• TorBox • …" variants, the app tries the chosen debrid first and falls back to the other, so you pick which debrid plays each title.
-+ **Torrin extension (this repo, `plugins/torrin/`):** curated dashboard + "Latest on Netflix / Hotstar / ZEE5 / SonyLIV" rows for Indian content (TMDB, `origin_country=IN`), with playback routed through the debrid layer. Requires your TMDB API key for metadata.
-+ **Torrin MDBList extension (`plugins/torrin-mdblist/`):** "Latest Movies" / "Latest Shows" rows from the [MDBList](https://mdblist.com) catalog (free API key, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback. Requires your TMDB API key for metadata.
-+ **Torrin Trakt extension (`plugins/torrin-trakt/`):** "Latest Movies" / "Latest Episodes" rows from the public [Trakt](https://trakt.tv) calendar (free client id, Settings → Player → Metadata) plus trending rows, with Torrin/TorBox debrid playback. Requires your TMDB API key for metadata.
-+ **Anime extension (`plugins/anime/`):** full [AniList](https://anilist.co) integration with GraphQL API for anime discovery and playback through debrid services.
++ **Plugins live in their own repository:** [**cloudstream-extend-plugins**](https://github.com/sandeep1027/cloudstream-extend-plugins) — the Torrin, HiAnime, AniKoto, AnimeCube, HDHub4u, BollyFlix and YTS extensions are maintained and released separately so they can be updated independently of the app. Install them from Settings → Extensions → Add repository; see that repo for the URLs and for how to build them.
 + **User-configurable TMDB API key:** Settings → Player → Metadata — supply your own free TMDB key (get one at [themoviedb.org](https://www.themoviedb.org/settings/api)). The plugins require this key to fetch metadata (plot, posters, trending rows); without it, metadata enrichment is gracefully skipped.
 + **User-configurable TMDB region and language:** Settings → Player → Metadata — choose your region (e.g., India, United States) and language (e.g., Hindi, English) to get localized content, trending movies/shows, and metadata in your preferred language.
 + **Download manager:** download content for offline viewing with configurable parallel downloads, Wi-Fi-only mode, quality preference, and auto-delete after watching. Settings → Player → Downloads.
@@ -32,29 +29,43 @@
 
 ### Install the plugins
 
-Settings → Extensions → Add repository — pick the repo for the extension you want (one repo per extension, so you can switch between them):
+The extensions are **not part of this repository** — they live in
+[**cloudstream-extend-plugins**](https://github.com/sandeep1027/cloudstream-extend-plugins)
+and are installed from there, so a plugin can be updated without touching the
+app. Settings → Extensions → Add repository, then paste the URL for the plugin you
+want (one repository per plugin, so you only install what you use):
 
-**Torrin** (Indian platform rows):
+| Plugin | Repository URL | Needs |
+|---|---|---|
+| Torrin | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/torrin/repo/repository.json` | debrid + TMDB key |
+| Torrin MDBList | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/torrin-mdblist/repo/repository.json` | debrid + TMDB + MDBList key |
+| Torrin Trakt | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/torrin-trakt/repo/repository.json` | debrid + TMDB + Trakt id |
+| HiAnime | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/hianime/repo/repository.json` | nothing |
+| AniKoto | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/anikoto/repo/repository.json` | nothing |
+| AnimeCube | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/animecube/repo/repository.json` | nothing |
+| HDHub4u | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/hdhub4u/repo/repository.json` | nothing |
+| BollyFlix | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/bollyflix/repo/repository.json` | a debrid account |
+| YTS | `https://raw.githubusercontent.com/sandeep1027/cloudstream-extend-plugins/main/plugins/yts/repo/repository.json` | a debrid account |
 
-```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin/repo/repository.json
-```
-
-**Torrin MDBList** (MDBList latest releases — needs your free MDBList API key in Settings → Player → Metadata):
-
-```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-mdblist/repo/repository.json
-```
-
-**Torrin Trakt** (Trakt calendar latest releases — needs your free Trakt client id in Settings → Player → Metadata):
-
-```
-https://raw.githubusercontent.com/sandeep1027/cloudstream-extend/main/plugins/torrin-trakt/repo/repository.json
-```
-
-Then install the extension from the repository and enable your debrid account(s) in Settings → Player → Debrid. With both Torrin and TorBox enabled, every quality tier / episode is offered once per debrid — tap the one you want. All three plugins above require your free [TMDB API key](https://www.themoviedb.org/settings/api) in Settings → Player → Metadata for metadata (plot, posters, trending rows).
+HiAnime, AniKoto, AnimeCube and HDHub4u stream directly and need no key. BollyFlix
+and YTS are catalogue/torrent sources — neither site serves video, so every link
+is a magnet resolved through your **Torrin / TorBox / Real-Debrid** account
+(Settings → Player → Debrid), which you need to enable for them to play. The
+Torrin plugins additionally want a free [TMDB API key](https://www.themoviedb.org/settings/api)
+in Settings → Player → Metadata.
 
 **One extra step:** the home screen only shows rows for ONE provider at a time. Tap the provider chip at the bottom of Home (it shows "None" by default) and pick the extension (e.g. "Torrin MDBList") — its rows then appear on Home.
+
+The home screen also filters providers by content type, and only **Movies** and **TV Series** are selected by default. HiAnime, AniKoto and AnimeCube are anime-only, so enable the **Anime** chip at the top of Home (or pin the provider from the same chip dialog) to see their rows.
+
+### Working on the plugins
+
+Plugin source, the built `.cs3` packages and per-plugin build scripts are in
+[**cloudstream-extend-plugins**](https://github.com/sandeep1027/cloudstream-extend-plugins),
+which builds against the CloudStream library module pulled in as a submodule.
+Its README covers building a `.cs3`, publishing a release (binary + sha256 go
+together — the app verifies every download) and testing on a device via
+`adb push … /sdcard/Cloudstream3/plugins/`.
 
 ### APK
 
@@ -64,6 +75,7 @@ Prebuilt APKs are available on the [Releases page](https://github.com/sandeep102
 
 + Original app: [recloudstream/cloudstream](https://github.com/recloudstream/cloudstream) (GPL-3.0) — all credit for the base application goes to the CloudStream team and its contributors.
 + Fork & debrid integrations: `sandeep1027` (this repository).
++ HiAnime / AniKoto / AnimeCube / HDHub4u extensions: ported to the CloudStream plugin API from the community provider scrapers by **Spyou**; the JavaScript originals are MIT licensed. Maintained in [cloudstream-extend-plugins](https://github.com/sandeep1027/cloudstream-extend-plugins).
 + Torrin API: [torrin.app](https://torrin.app) · TorBox API: [torbox.app](https://torbox.app) · Real-Debrid API: [real-debrid.com](https://real-debrid.com) · TMDB data: [themoviedb.org](https://www.themoviedb.org/) (used per [their API terms](https://www.themoviedb.org/documentation/rules)).
 
 ## License

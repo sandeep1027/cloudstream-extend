@@ -23,4 +23,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "CloudStream"
-include(":app", ":shared", ":library", ":docs", ":desktopApp", ":plugins:torrin", ":plugins:torrin-mdblist", ":plugins:torrin-trakt", ":plugins:anime")
+// The plugins are maintained separately so they can be released independently:
+// https://github.com/sandeep1027/cloudstream-extend-plugins
+include(":app", ":shared", ":library", ":docs", ":desktopApp")
