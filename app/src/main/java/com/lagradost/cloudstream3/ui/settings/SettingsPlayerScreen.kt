@@ -106,6 +106,14 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torrin_base_url),
                         subtitle = stringResource(R.string.torrin_base_url_des),
                     ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.debrid.torrinTimeoutSeconds,
+                        title = stringResource(R.string.debrid_timeout),
+                        subtitle = stringResource(R.string.debrid_timeout_des),
+                        valueRange = 30..600,
+                        steps = 56,
+                        valueString = "%d s",
+                    ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test Torrin Connection",
                         subtitle = "Verify your Torrin API key",
@@ -130,6 +138,14 @@ object SettingsPlayerScreen : SearchableSettings {
                         title = stringResource(R.string.torbox_api_key),
                         subtitle = stringResource(R.string.torbox_api_key_des),
                     ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.debrid.torboxTimeoutSeconds,
+                        title = stringResource(R.string.debrid_timeout),
+                        subtitle = stringResource(R.string.debrid_timeout_des),
+                        valueRange = 30..600,
+                        steps = 56,
+                        valueString = "%d s",
+                    ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test TorBox Connection",
                         subtitle = "Verify your TorBox API key and show account info",
@@ -153,6 +169,14 @@ object SettingsPlayerScreen : SearchableSettings {
                         preference = settings.debrid.realDebridApiKey,
                         title = "Real-Debrid API Key",
                         subtitle = "Your Real-Debrid API token",
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.debrid.realDebridTimeoutSeconds,
+                        title = stringResource(R.string.debrid_timeout),
+                        subtitle = stringResource(R.string.debrid_timeout_des),
+                        valueRange = 30..600,
+                        steps = 56,
+                        valueString = "%d s",
                     ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test Real-Debrid Connection",

@@ -9,6 +9,12 @@ import java.util.concurrent.ConcurrentHashMap
  * Caches the mapping from magnet info_hash to resolved stream URLs so we
  * don't re-submit the same magnets to the debrid API within the cache TTL.
  *
+ * Entries are keyed by debrid service *and* info_hash. The same hash resolved
+ * through two services is two different links (Torrin and TorBox hand out
+ * different CDN URLs, and a cached-only TorBox link is a different flavour of
+ * stream again), so a key of the bare hash would serve one service's answer to
+ * another service's request.
+ *
  * Thread-safe: uses ConcurrentHashMap for lock-free concurrent access.
  */
 object DebridCache {
@@ -18,19 +24,24 @@ object DebridCache {
         val expiresAt: Long,
     )
 
-    // info_hash -> CacheEntry
+    // "source:INFO_HASH" -> CacheEntry
     private val cache = ConcurrentHashMap<String, CacheEntry>()
 
     /** Default cache TTL: 2 hours (debrid stream URLs typically expire after 3-4 hours) */
     private const val DEFAULT_TTL_MS = 2 * 60 * 60 * 1000L
 
+    private fun key(source: String, infoHash: String): String =
+        "$source:${infoHash.uppercase()}"
+
     /**
-     * Gets a cached stream link for the given info_hash, or null if not cached or expired.
+     * Gets a cached stream link for the given info_hash from the given debrid
+     * service, or null if not cached or expired.
      */
-    fun get(infoHash: String): ExtractorLink? {
-        val entry = cache[infoHash.uppercase()] ?: return null
+    fun get(infoHash: String, source: String): ExtractorLink? {
+        val cacheKey = key(source, infoHash)
+        val entry = cache[cacheKey] ?: return null
         if (System.currentTimeMillis() > entry.expiresAt) {
-            cache.remove(infoHash.uppercase())
+            cache.remove(cacheKey)
             return null
         }
         return entry.link
@@ -39,15 +50,15 @@ object DebridCache {
     /**
      * Caches a stream link for the given info_hash with the default TTL.
      */
-    fun put(infoHash: String, link: ExtractorLink) {
-        put(infoHash, link, DEFAULT_TTL_MS)
+    fun put(infoHash: String, source: String, link: ExtractorLink) {
+        put(infoHash, source, link, DEFAULT_TTL_MS)
     }
 
     /**
      * Caches a stream link for the given info_hash with a custom TTL.
      */
-    fun put(infoHash: String, link: ExtractorLink, ttlMs: Long) {
-        cache[infoHash.uppercase()] = CacheEntry(
+    fun put(infoHash: String, source: String, link: ExtractorLink, ttlMs: Long) {
+        cache[key(source, infoHash)] = CacheEntry(
             link = link,
             expiresAt = System.currentTimeMillis() + ttlMs
         )

@@ -28,9 +28,13 @@ import java.util.Locale
  * - `GET  /{v}/api/torrents/requestdl?token=***&torrent_id=...&file_id=...&redirect=false`
  *    -> `{data: "<cdn url>"}`
  * - `GET  /{v}/api/torrents/checkcached?hash=...` -> check if torrent is already cached
+ * - `GET  /{v}/api/user/me` -> account info, used by the connection test
  * - Auth: `Authorization: Bearer *** key` (requestdl takes `token=` query param)
  */
 object TorBox {
+
+    /** Cache namespace, so a link resolved here is never handed to another service. */
+    private const val SOURCE = "TorBox"
 
     private const val POLL_INTERVAL_MS = 3_000L
     private const val MAX_RETRIES = 3
@@ -177,7 +181,7 @@ object TorBox {
         val baseUrl = getBaseUrl()
         return try {
             val response = app.get(
-                url = "$baseUrl/user/webhook",
+                url = "$baseUrl/user/me",
                 headers = authHeaders(apiKey),
             )
             if (!response.isSuccessful) {
@@ -248,7 +252,7 @@ object TorBox {
                 }
 
             // 1. Check local cache first
-            DebridCache.get(infoHash)?.let { cached ->
+            DebridCache.get(infoHash, SOURCE)?.let { cached ->
                 DebridLogger.cacheD(context, "Cache hit for $infoHash")
                 DebridLogger.logDuration(context, "TorBox", "Cache hit", startTime)
                 return cached
@@ -277,11 +281,11 @@ object TorBox {
                 ?: return null
 
             // 5. Get stream link
-            val streamLink = buildStreamLink(context, apiKey, finished, preferredFile)
+            val streamLink = buildStreamLink(context, baseUrl, apiKey, finished, preferredFile)
                 ?: return null
 
             // 6. Cache the result
-            DebridCache.put(infoHash, streamLink)
+            DebridCache.put(infoHash, SOURCE, streamLink)
             DebridLogger.logDuration(context, "TorBox", "Full resolution", startTime)
 
             streamLink
@@ -423,6 +427,7 @@ object TorBox {
      */
     private suspend fun buildStreamLink(
         context: Context,
+        baseUrl: String,
         apiKey : String,
         torrent: TbTorrent,
         preferredFile: Int?
@@ -437,7 +442,7 @@ object TorBox {
                 DebridLogger.torboxW(context, "no video-like file in torrent ${torrent.id}")
                 return null
             }
-        val url = requestDownloadLink(context, apiKey, torrent.id, best.id)
+        val url = requestDownloadLink(context, baseUrl, apiKey, torrent.id, best.id)
             ?: return null
         if (url.isBlank()) return null
         val name = best.name.ifBlank { torrent.name.ifBlank { "TorBox" } }
@@ -456,13 +461,14 @@ object TorBox {
      */
     private suspend fun requestDownloadLink(
         context: Context,
+        baseUrl: String,
         apiKey : String,
         torrentId: Double,
         fileId: Double
     ): String? {
         val response = app.get(
             url = buildString {
-                append(DebridPreferences.DEFAULT_TORBOX_BASE_URL)
+                append(baseUrl.trimEnd('/'))
                 append("/torrents/requestdl")
                 append("?token=***")
                 append(apiKey)

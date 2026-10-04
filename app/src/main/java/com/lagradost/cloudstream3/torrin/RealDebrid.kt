@@ -27,6 +27,9 @@ import java.util.Locale
  */
 object RealDebrid {
 
+    /** Cache namespace, so a link resolved here is never handed to another service. */
+    private const val SOURCE = "Real-Debrid"
+
     private const val POLL_INTERVAL_MS = 2_000L
     private const val MAX_RETRIES = 3
     private const val RETRY_BASE_DELAY_MS = 1_000L
@@ -185,7 +188,7 @@ object RealDebrid {
 
             // 1. Check local cache first
             if (infoHash != null) {
-                DebridCache.get(infoHash)?.let { cached ->
+                DebridCache.get(infoHash, SOURCE)?.let { cached ->
                     DebridLogger.cacheD(context, "Cache hit for $infoHash")
                     DebridLogger.logDuration(context, "RealDebrid", "Cache hit", startTime)
                     return cached
@@ -215,7 +218,7 @@ object RealDebrid {
 
             // 7. Cache the result
             if (infoHash != null) {
-                DebridCache.put(infoHash, streamLink)
+                DebridCache.put(infoHash, SOURCE, streamLink)
             }
             DebridLogger.logDuration(context, "RealDebrid", "Full resolution", startTime)
 
