@@ -202,10 +202,12 @@ object TorBox {
         }
     }
 
-    /**
-     * Pre-checks if a torrent is already cached on TorBox servers.
-     * Returns the cached torrent info if available, null otherwise.
-     */
+/**
+ * Pre-checks whether TorBox already holds this torrent, which is what
+ * `GET /torrents/checkcached` reports (TorBox's route for Real-Debrid's
+ * `/torrents/instantAvailability/{hash}`). Returns the cached entry when it is
+ * held, null otherwise.
+ */
     private suspend fun checkCached(
         context: Context,
         baseUrl: String,
@@ -259,14 +261,19 @@ object TorBox {
             }
             DebridLogger.cacheD(context, "Cache miss for $infoHash")
 
-            // 2. Check if already cached on TorBox servers
+            // 2. Check whether TorBox already holds this torrent
             DebridLogger.torboxD(context, "Checking cache availability for $infoHash")
             val cachedOnServer = checkCached(context, baseUrl, apiKey, infoHash)
-            if (cachedOnServer != null) {
-                DebridLogger.torboxD(context, "Found cached on TorBox servers")
+            val servedFromCache = cachedOnServer != null
+            if (servedFromCache) {
+                DebridLogger.torboxD(
+                    context,
+                    "TorBox already has $infoHash (instant=${cachedOnServer.instant})"
+                )
             }
 
-            // 3. Submit to TorBox (or use cached)
+            // 3. Submit to TorBox. For a torrent it already holds this returns the
+            // existing id and reports it finished, so there is nothing to wait for.
             val created = createTorrentWithRetry(context, baseUrl, apiKey, cleanMagnet)
                 ?: return null
             if (created.torrent_id <= 0 && (created.queued_id ?: 0.0) <= 0) {
@@ -276,9 +283,41 @@ object TorBox {
             val torrentId = created.torrent_id.takeIf { it > 0 } ?: created.queued_id!!
             DebridLogger.torboxD(context, "Created torrent $torrentId for hash $infoHash")
 
-            // 4. Wait for completion
-            val finished = waitForCompletion(context, baseUrl, apiKey, torrentId, infoHash, timeoutMs)
-                ?: return null
+            // 4. Wait for completion. A cached torrent comes back finished on the
+            // first poll, so ask once and only start looping if it is not.
+            val finished = if (servedFromCache) {
+                val torrent = getTorrent(context, baseUrl, apiKey, torrentId)
+                when {
+                    torrent == null -> {
+                        DebridLogger.torboxW(
+                            context,
+                            "cached torrent $torrentId (hash $infoHash) could not be read back"
+                        )
+                        return null
+                    }
+                    torrent.download_finished -> torrent
+                    torrent.download_state.lowercase(Locale.ROOT) in FAILED_STATES -> {
+                        DebridLogger.torboxW(
+                            context,
+                            "cached torrent $torrentId (hash $infoHash) reported state '${torrent.download_state}'"
+                        )
+                        return null
+                    }
+                    // The cache check said it had it but the download is still
+                    // running; fall through to the normal wait rather than failing.
+                    else -> {
+                        DebridLogger.torboxD(
+                            context,
+                            "cached torrent $torrentId is still downloading, waiting"
+                        )
+                        waitForCompletion(context, baseUrl, apiKey, torrentId, infoHash, timeoutMs)
+                            ?: return null
+                    }
+                }
+            } else {
+                waitForCompletion(context, baseUrl, apiKey, torrentId, infoHash, timeoutMs)
+                    ?: return null
+            }
 
             // 5. Get stream link
             val streamLink = buildStreamLink(context, baseUrl, apiKey, finished, preferredFile)
@@ -286,7 +325,12 @@ object TorBox {
 
             // 6. Cache the result
             DebridCache.put(infoHash, SOURCE, streamLink)
-            DebridLogger.logDuration(context, "TorBox", "Full resolution", startTime)
+            DebridLogger.logDuration(
+                context,
+                "TorBox",
+                if (servedFromCache) "Cached resolution" else "Full resolution",
+                startTime
+            )
 
             streamLink
         } catch (t: Throwable) {
