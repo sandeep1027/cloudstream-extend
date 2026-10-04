@@ -803,7 +803,16 @@ class CS3IPlayer : IPlayer {
                 it.key.equals("User-Agent", ignoreCase = true)
             }?.value ?: USER_AGENT
 
-            val source = if (interceptor == null) {
+            // Cronet drops the referer these hosts require, so a link that asks
+            // for one has to go through OkHttp. Plenty of sources answer 403 on
+            // the playlist itself without it (verified: same url and headers
+            // return 200 with a Referer and 403 without), and the failure looks
+            // like a dead source rather than a header problem. Extensions used
+            // to work around this one by one with getVideoInterceptor; doing it
+            // here covers every provider, including ones written before this.
+            val needsReferer = link.referer.isNotBlank()
+
+            val source = if (interceptor == null && !needsReferer) {
                 if (engine == null) {
                     Log.d(TAG, "Using DefaultHttpDataSource for $link")
                     OkHttpDataSource.Factory(app.baseClient).setUserAgent(userAgent)
@@ -817,10 +826,17 @@ class CS3IPlayer : IPlayer {
                         .setHandleSetCookieRequests(true)
                 }
             } else {
-                Log.d(TAG, "Using OkHttpDataSource for $link")
-                val client = app.baseClient.newBuilder()
-                    .addInterceptor(interceptor)
-                    .build()
+                Log.d(
+                    TAG,
+                    "Using OkHttpDataSource for $link (interceptor=${interceptor != null}, referer=$needsReferer)"
+                )
+                val client = if (interceptor != null) {
+                    app.baseClient.newBuilder()
+                        .addInterceptor(interceptor)
+                        .build()
+                } else {
+                    app.baseClient
+                }
                 OkHttpDataSource.Factory(client).setUserAgent(userAgent)
             }
 
