@@ -89,6 +89,7 @@ import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.torrin.DebridCache
 import com.lagradost.cloudstream3.torrin.RealDebrid
 import com.lagradost.cloudstream3.torrin.TorBox
+import com.lagradost.cloudstream3.torrin.TorBoxWebDl
 import com.lagradost.cloudstream3.torrin.Torrin
 import com.lagradost.cloudstream3.ui.player.CustomDecoder.Companion.fixSubtitleAlignment
 import com.lagradost.cloudstream3.ui.player.live.LiveHelper
@@ -113,9 +114,11 @@ import com.lagradost.cloudstream3.utils.SubtitleHelper.fromTagToLanguageName
 import com.lagradost.cloudstream3.utils.WIDEVINE_DRM_UUID
 import com.lagradost.cloudstream3.utils.videoskip.VideoSkipStamp
 import com.lagradost.cloudstream4.AppSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import org.chromium.net.CronetEngine
 import java.io.File
@@ -1870,10 +1873,49 @@ class CS3IPlayer : IPlayer {
             .show().setDefaultFocus()
     }
 
+    /**
+     * Resolves a `cs_webdl` hinted link through TorBox's Web Downloads service and
+     * then plays the result, mirroring how the magnet path swaps in a debrid
+     * link before handing it back to the player.
+     */
+    private fun loadWebDownload(context: Context, link: ExtractorLink, retry: Boolean) {
+        if (!retry) {
+            releasePlayer()
+            loadExo(context, listOf(), listOf())
+        }
+        event(
+            StatusEvent(
+                wasPlaying = CSPlayerLoading.IsPlaying,
+                isPlaying = CSPlayerLoading.IsBuffering
+            )
+        )
+        ioSafe {
+            val resolved = TorBoxWebDl.transformLink(context, link)
+            withContext(Dispatchers.Main) {
+                if (resolved != null) {
+                    loadOnlinePlayer(context, resolved, retry = true)
+                } else {
+                    event(
+                        ErrorEvent(
+                            ErrorLoadingException(context.getString(R.string.webdl_resolve_failed))
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     @SuppressLint("UnsafeOptInUsageError")
     @MainThread
     private fun loadOnlinePlayer(context: Context, link: ExtractorLink, retry: Boolean = false) {
         Log.i(TAG, "loadOnlinePlayer $link")
+        // A plugin marks a hosted file link as a TorBox web download with a
+        // ?cs_webdl=1 (or ?cs_webdl=only_cached) hint. Resolve it here, before the
+        // normal path below, which would otherwise try to play the hoster page.
+        if (TorBoxWebDl.hasHint(link.url)) {
+            loadWebDownload(context, link, retry)
+            return
+        }
         try {
             val mime = when (link.type) {
                 ExtractorLinkType.M3U8 -> MimeTypes.APPLICATION_M3U8

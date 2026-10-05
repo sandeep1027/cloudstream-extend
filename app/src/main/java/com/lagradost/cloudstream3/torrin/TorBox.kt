@@ -126,15 +126,27 @@ object TorBox {
         val detail: String? = null,
     )
 
-    // User info response for test connection
+    // User info response for test connection. Field names taken from a live
+    // GET /user/me: the API returns plan/premium_expires_at/is_subscribed, not
+    // the premium/expires_at/current_plan names an earlier guess here used, which
+    // made every account report as "Free (Unknown)".
     @Serializable
     data class TbUserData(
         val email: String = "",
-        val premium: Int = 0,
-        val expires_at: String? = null,
-        val current_plan: String? = null,
-        val total_used: Double = 0.0,
-        val total_data: Double = 0.0,
+        val plan: Int = 0,
+        val is_subscribed: Boolean = false,
+        val premium_expires_at: String? = null,
+        val total_bytes_downloaded: Long = 0,
+        val torrents_downloaded: Int = 0,
+        val web_downloads_downloaded: Int = 0,
+    )
+
+    /** Plan ids as TorBox's own SDK documents them: 0 Free, 1 Essential, 2 Pro, 3 Standard. */
+    private val PLAN_NAMES = mapOf(
+        0 to "Free",
+        1 to "Essential",
+        2 to "Pro",
+        3 to "Standard",
     )
 
     @Serializable
@@ -192,10 +204,14 @@ object TorBox {
                 return false to "Invalid response from server"
             }
             val user = parsed.data
-            val premium = if (user.premium > 0) "Premium" else "Free"
-            val plan = user.current_plan ?: "Unknown"
-            val expires = user.expires_at?.takeIf { it.isNotBlank() } ?: "N/A"
-            true to "Connected!\nPlan: $premium ($plan)\nExpires: $expires"
+            val plan = PLAN_NAMES[user.plan] ?: "Plan ${user.plan}"
+            val expires = user.premium_expires_at?.takeIf { it.isNotBlank() } ?: "N/A"
+            val downloaded = user.total_bytes_downloaded / (1024.0 * 1024.0 * 1024.0)
+            val status = if (user.is_subscribed) "" else "\nNot subscribed"
+            true to "Connected!\nPlan: $plan\nExpires: $expires\n" +
+                "Downloaded: %.1f GB (%d torrents, %d web)$status".format(
+                    downloaded, user.torrents_downloaded, user.web_downloads_downloaded
+                )
         } catch (t: Throwable) {
             DebridLogger.torboxW(context, "testConnection failed", t)
             false to "Connection error: ${t.message}"

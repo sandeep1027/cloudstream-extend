@@ -396,6 +396,7 @@
     <string name="torbox_api_key_des">Your personal API key, found in your torbox.app account (Settings → API)</string>
     <string name="debrid_timeout">Resolve timeout</string>
     <string name="debrid_timeout_des">How long to wait for a torrent to finish downloading before giving up. TorBox serves cached torrents immediately, so this only matters for uncached ones</string>
+    <string name="webdl_resolve_failed">TorBox could not fetch this file. Check that TorBox is enabled with a valid API key, and that your plan covers web downloads</string>
     <string name="pref_category_metadata">Metadata</string>
     <string name="tmdb_api_key">TMDB API key</string>
     <string name="tmdb_api_key_des">Your own TheMovieDB API key (themoviedb.org → Settings → API). Leave empty to use the built-in shared key</string>
