@@ -112,7 +112,6 @@ object SettingsPlayerScreen : SearchableSettings {
                         subtitle = stringResource(R.string.debrid_timeout_des),
                         valueRange = 30..600,
                         steps = 56,
-                        valueString = "%d s",
                     ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test Torrin Connection",
@@ -144,7 +143,6 @@ object SettingsPlayerScreen : SearchableSettings {
                         subtitle = stringResource(R.string.debrid_timeout_des),
                         valueRange = 30..600,
                         steps = 56,
-                        valueString = "%d s",
                     ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test TorBox Connection",
@@ -176,7 +174,6 @@ object SettingsPlayerScreen : SearchableSettings {
                         subtitle = stringResource(R.string.debrid_timeout_des),
                         valueRange = 30..600,
                         steps = 56,
-                        valueString = "%d s",
                     ),
                     Preference.PreferenceItem.TextPreference(
                         title = "Test Real-Debrid Connection",
