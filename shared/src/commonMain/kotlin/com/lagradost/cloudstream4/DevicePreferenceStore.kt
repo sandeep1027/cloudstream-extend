@@ -154,6 +154,9 @@ class ProviderPreferences(preferences: PreferenceStore) {
         private val defaultPreferredMedia =
             TvType.entries.filter { it != TvType.NSFW }.map { it.ordinal.toString() }.toSet()
         private val defaultDub = DubStatus.entries.map { it.name }.toSet()
+
+        /** A key is a credential, so keep it out of backup and restore flows. */
+        val PROWLARR_API_KEY = PreferenceData.privateKey("prowlarr_api_key")
     }
 
     val preferredMedia = preferences.getStringSet(
@@ -182,6 +185,19 @@ class ProviderPreferences(preferences: PreferenceStore) {
      * Used by the Torrin Trakt extension for latest-releases rows.
      */
     val traktApiKey = preferences.getString("trakt_api_key", "")
+
+    /**
+     * Base URL of the user's Prowlarr instance, e.g. "http://10.0.2.2:8989".
+     * Prowlarr is self hosted, so this is per user and there is no useful default.
+     */
+    val prowlarrHost = preferences.getString("prowlarr_host", "")
+
+    /**
+     * User supplied Prowlarr API key. Prowlarr generates it itself and refuses a
+     * value set through the API, so it is whatever Prowlarr shows in its own
+     * Settings -> General.
+     */
+    val prowlarrApiKey = preferences.getString(PROWLARR_API_KEY, "")
 }
 
 class PlayerPreferences(preferences: PreferenceStore) {

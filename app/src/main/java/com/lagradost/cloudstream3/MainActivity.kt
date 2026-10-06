@@ -182,6 +182,8 @@ import com.lagradost.cloudstream3.utils.txt
 import com.lagradost.cloudstream4.AppSettings
 import com.lagradost.cloudstream4.theme.CloudStreamTheme
 import com.lagradost.cloudstream3.metaproviders.mdblistApiKeyOverride
+import com.lagradost.cloudstream3.metaproviders.prowlarrApiKey
+import com.lagradost.cloudstream3.metaproviders.prowlarrHost
 import com.lagradost.cloudstream3.metaproviders.tmdbApiKeyOverride
 import com.lagradost.cloudstream3.metaproviders.tmdbRegionOverride
 import com.lagradost.cloudstream3.metaproviders.tmdbLanguageOverride
@@ -652,6 +654,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         tmdbApiKeyOverride = AppSettings(this).provider.tmdbApiKey.get().takeIf { it.isNotBlank() }
         mdblistApiKeyOverride = AppSettings(this).provider.mdblistApiKey.get().takeIf { it.isNotBlank() }
         traktApiKeyOverride = AppSettings(this).provider.traktApiKey.get().takeIf { it.isNotBlank() }
+        // The prowlarr plugin reads these instead of the app's preferences: a plugin
+        // runs in its own classloader and cannot reach them itself.
+        prowlarrHost = AppSettings(this).provider.prowlarrHost.get().takeIf { it.isNotBlank() }
+        prowlarrApiKey = AppSettings(this).provider.prowlarrApiKey.get().takeIf { it.isNotBlank() }
         // Keep the user supplied TMDB region and language in sync
         tmdbRegionOverride = AppSettings(this).player.tmdbRegion.get().takeIf { it.isNotBlank() }
         tmdbLanguageOverride = AppSettings(this).player.tmdbLanguage.get().takeIf { it.isNotBlank() }

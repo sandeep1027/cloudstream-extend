@@ -197,6 +197,21 @@ object SettingsPlayerScreen : SearchableSettings {
                 ),
             ),
             Preference.PreferenceGroup(
+                title = stringResource(R.string.prowlarr_category),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.prowlarrHost,
+                        title = stringResource(R.string.prowlarr_host),
+                        subtitle = stringResource(R.string.prowlarr_host_des),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        preference = settings.provider.prowlarrApiKey,
+                        title = stringResource(R.string.prowlarr_api_key),
+                        subtitle = stringResource(R.string.prowlarr_api_key_des),
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
                 title = stringResource(R.string.pref_category_metadata),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.EditTextPreference(
