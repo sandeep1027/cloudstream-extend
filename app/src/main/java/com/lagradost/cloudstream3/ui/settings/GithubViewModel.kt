@@ -50,10 +50,13 @@ sealed class GithubAction {
     data class SkipUpdate(val file: GithubReleases.GithubFile) : GithubAction()
 }
 
-const val APK_USERNAME = "recloudstream"
-const val APK_REPOSITORY = "cloudstream"
+const val APK_USERNAME = "sandeep1027"
+const val APK_REPOSITORY = "cloudstream-extend"
 const val APK_PRERELEASE = "pre-release"
 const val APK_CONTENT_TYPE = "application/vnd.android.package-archive"
+
+/** Asset names carry the app version: "4.9.3.apk" upstream, "cloudstream-extend-4.9.3.apk" here. */
+private val VERSION_IN_ASSET_NAME = Regex("""\d+\.\d+\.\d+""")
 
 interface AppUpdater {
     @Throws
@@ -250,8 +253,12 @@ class GithubViewModel(
 
         val release = getRelease(prerelease)
 
-        // If on stable, only check that the display name matches
-        if (!prerelease && release.displayName == versionName) {
+        // If on stable, only check that the display name matches.
+        // Asset names embed the version ("4.9.3.apk" or "cloudstream-extend-4.9.3.apk"),
+        // so compare the extracted version against the running one.
+        if (!prerelease &&
+            VERSION_IN_ASSET_NAME.find(release.displayName)?.value == versionName
+        ) {
             updateState {
                 copy(dialog = baseDialog.copy(state = GithubUpdateDialogState.NoUpdateFound))
             }
