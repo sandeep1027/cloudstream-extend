@@ -6605,6 +6605,14 @@ public final class com/lagradost/cloudstream3/metaproviders/MyDramaListAPI$Trail
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class com/lagradost/cloudstream3/metaproviders/ProwlarrConfigKt {
+	public static final fun getProwlarrApiKey ()Ljava/lang/String;
+	public static final fun getProwlarrHost ()Ljava/lang/String;
+	public static final fun prowlarrBaseUrl ()Ljava/lang/String;
+	public static final fun setProwlarrApiKey (Ljava/lang/String;)V
+	public static final fun setProwlarrHost (Ljava/lang/String;)V
+}
+
 public final class com/lagradost/cloudstream3/metaproviders/SyncRedirector {
 	public static final field INSTANCE Lcom/lagradost/cloudstream3/metaproviders/SyncRedirector;
 	public final fun redirect (Ljava/lang/String;Lcom/lagradost/cloudstream3/MainAPI;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -7340,6 +7348,19 @@ public final synthetic class com/lagradost/cloudstream3/metaproviders/TmdbProvid
 
 public final class com/lagradost/cloudstream3/metaproviders/TmdbProvider$TmdbVideos$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/lagradost/cloudstream3/metaproviders/TmdbProviderKt {
+	public static final fun getMdblistApiKeyOverride ()Ljava/lang/String;
+	public static final fun getTmdbApiKeyOverride ()Ljava/lang/String;
+	public static final fun getTmdbLanguageOverride ()Ljava/lang/String;
+	public static final fun getTmdbRegionOverride ()Ljava/lang/String;
+	public static final fun getTraktApiKeyOverride ()Ljava/lang/String;
+	public static final fun setMdblistApiKeyOverride (Ljava/lang/String;)V
+	public static final fun setTmdbApiKeyOverride (Ljava/lang/String;)V
+	public static final fun setTmdbLanguageOverride (Ljava/lang/String;)V
+	public static final fun setTmdbRegionOverride (Ljava/lang/String;)V
+	public static final fun setTraktApiKeyOverride (Ljava/lang/String;)V
 }
 
 public class com/lagradost/cloudstream3/metaproviders/TraktProvider : com/lagradost/cloudstream3/MainAPI {

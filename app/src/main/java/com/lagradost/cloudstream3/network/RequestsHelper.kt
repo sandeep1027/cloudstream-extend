@@ -70,21 +70,6 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
     return baseClient
 }
 
-private val DEFAULT_HEADERS = mapOf("user-agent" to USER_AGENT)
-
-/**
- * Set headers > Set cookies > Default headers > Default Cookies
- * TODO REMOVE AND REPLACE WITH NICEHTTP
- */
-fun getHeaders(
-    headers: Map<String, String>,
-    cookie: Map<String, String>
-): Headers {
-    val cookieMap =
-        if (cookie.isNotEmpty()) mapOf(
-            "Cookie" to cookie.entries.joinToString(" ") {
-                "${it.key}=${it.value};"
-            }) else mapOf()
-    val tempHeaders = (DEFAULT_HEADERS + headers + cookieMap)
-    return tempHeaders.toHeaders()
-}
+// getHeaders() moved to the library (network/RequestHeaders.kt) so CloudflareKiller
+// can use it: both now live in :library, and a .cs3 plugin needs CloudflareKiller to
+// be able to pass an Interceptor.
