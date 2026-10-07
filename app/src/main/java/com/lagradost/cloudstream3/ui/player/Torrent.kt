@@ -21,6 +21,8 @@ object Torrent {
     private const val TORRENT_SERVER_PATH: String = "torrent_tmp"
     private const val TIMEOUT: Long = 3
     private const val TAG: String = "Torrent"
+    private const val PREBUFFER_TIMEOUT_MS = 30_000L
+    private const val PREBUFFER_POLL_INTERVAL_MS = 500L
 
     /** Cleans up both old aria2c files and newer go server, (even if the new is also self cleaning) */
     @Throws
@@ -232,6 +234,32 @@ object Torrent {
             this.referer = ""
             this.quality = link.quality
         } to status
+    }
+
+    /**
+     * Waits until [targetBytes] are pre-buffered for the given torrent, or a 30 s
+     * timeout expires. Returns true when the target is reached. The caller can
+     * still proceed to playback on timeout; the pre-buffer is a best effort to
+     * reduce initial stuttering.
+     */
+    @Throws
+    suspend fun prebuffer(hash: String, targetBytes: Long = 10L * 1024 * 1024): Boolean {
+        if (TORRENT_SERVER_URL.isEmpty()) {
+            throw ErrorLoadingException("Not initialized")
+        }
+        val deadline = System.currentTimeMillis() + PREBUFFER_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val status = get(hash)
+            val buffered = status.preloadedBytes ?: 0L
+            if (buffered >= targetBytes) {
+                Log.i(TAG, "Pre-buffered $buffered bytes (target $targetBytes)")
+                return true
+            }
+            kotlinx.coroutines.delay(PREBUFFER_POLL_INTERVAL_MS)
+        }
+        val finalBuffered = try { get(hash).preloadedBytes ?: 0L } catch (_: Throwable) { 0L }
+        Log.w(TAG, "Pre-buffer timeout: $finalBuffered of $targetBytes bytes")
+        return false
     }
 
     private val trackers = listOf(

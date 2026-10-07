@@ -280,6 +280,15 @@ class DebridPreferences(preferences: PreferenceStore) {
         const val KEY_REALDEBRID_TIMEOUT_SECONDS = "realdebrid_timeout_seconds_key"
 
         const val KEY_DEBUG_ENABLED = "debrid_debug_enabled"
+
+        /** When true, magnets go through the local torrent engine first; debrids become optional. */
+        const val KEY_LOCAL_TORRENT_PRIMARY = "local_torrent_primary_key"
+
+        /** When true, skip the torrent consent dialog entirely. */
+        const val KEY_AUTO_ACCEPT_TORRENT = "auto_accept_torrent_key"
+
+        /** How many MB to pre-buffer before handing off to ExoPlayer. */
+        const val KEY_TORRENT_PREBUFFER_MB = "torrent_prebuffer_mb_key"
     }
 
     val torrinEnabled = preferences.getBoolean(KEY_ENABLED, false)
@@ -296,6 +305,10 @@ class DebridPreferences(preferences: PreferenceStore) {
     val realDebridTimeoutSeconds = preferences.getInt(KEY_REALDEBRID_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
 
     val debridDebugEnabled = preferences.getBoolean(KEY_DEBUG_ENABLED, false)
+
+    val localTorrentPrimary = preferences.getBoolean(KEY_LOCAL_TORRENT_PRIMARY, true)
+    val autoAcceptTorrent = preferences.getBoolean(KEY_AUTO_ACCEPT_TORRENT, false)
+    val torrentPrebufferMb = preferences.getInt(KEY_TORRENT_PREBUFFER_MB, 10)
 }
 
 /**

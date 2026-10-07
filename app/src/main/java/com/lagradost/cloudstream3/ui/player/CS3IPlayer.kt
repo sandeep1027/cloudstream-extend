@@ -16,6 +16,7 @@ import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.media3.common.C.TIME_UNSET
 import androidx.media3.common.C.TRACK_TYPE_AUDIO
@@ -1814,6 +1815,21 @@ class CS3IPlayer : IPlayer {
                 if (exoPlayer == null) return@ioSafe
                 val (newLink, status) = Torrent.transformLink(link)
                 val hash = status.hash
+
+                // Pre-buffer before handing off to ExoPlayer. The target comes
+                // from the user's setting; on timeout we proceed anyway rather
+                // than blocking playback indefinitely.
+                val prebufferMb = PreferenceManager.getDefaultSharedPreferences(context)
+                    .getInt("torrent_prebuffer_mb_key", 10)
+                if (hash != null && prebufferMb > 0) {
+                    try {
+                        Torrent.prebuffer(hash, prebufferMb.toLong() * 1024 * 1024)
+                    } catch (t: Throwable) {
+                        // Pre-buffer is best-effort; log but don't block playback
+                        Log.w("CS3IPlayer", "Pre-buffer failed", t)
+                    }
+                }
+
                 if (exoPlayer == null) return@ioSafe
                 runOnMainThread {
                     if (exoPlayer == null) return@runOnMainThread
@@ -1832,12 +1848,23 @@ class CS3IPlayer : IPlayer {
     /**
      * Plays a torrent/magnet link through the local torrent engine.
      * If the user has already consented to local torrent streaming in this
-     * session the link is played directly, otherwise a consent dialog is shown
-     * first to prevent accidental torrent sessions.
+     * session, or has enabled auto-accept in settings, the link is played
+     * directly. Otherwise a consent dialog is shown first to prevent
+     * accidental torrent sessions.
      */
     @MainThread
     private fun playLocalTorrent(context: Context, link: ExtractorLink) {
         if (Torrent.hasAcceptedTorrentForThisSession == true) {
+            loadTorrent(context, link)
+            return
+        }
+
+        // Auto-accept skips the dialog entirely for power users who opted in
+        // via the "Always allow" button or the settings toggle.
+        val autoAccept = PreferenceManager.getDefaultSharedPreferences(context)
+            .getBoolean("auto_accept_torrent_key", false)
+        if (autoAccept) {
+            Torrent.hasAcceptedTorrentForThisSession = true
             loadTorrent(context, link)
             return
         }
@@ -1858,6 +1885,15 @@ class CS3IPlayer : IPlayer {
                             context.getString(R.string.torrent_not_accepted)
                         event(ErrorEvent(ErrorLoadingException(errorMessage)))
                     }
+
+                    // "Always allow": persist the choice so future sessions skip
+                    // the dialog entirely until the user disables it in settings.
+                    DialogInterface.BUTTON_NEUTRAL -> {
+                        PreferenceManager.getDefaultSharedPreferences(context)
+                            .edit { putBoolean("auto_accept_torrent_key", true) }
+                        Torrent.hasAcceptedTorrentForThisSession = true
+                        loadTorrent(context, link)
+                    }
                 }
             }
 
@@ -1870,6 +1906,7 @@ class CS3IPlayer : IPlayer {
             }
             .setPositiveButton(R.string.ok, dialogClickListener)
             .setNegativeButton(R.string.go_back, dialogClickListener)
+            .setNeutralButton(R.string.always_allow, dialogClickListener)
             .show().setDefaultFocus()
     }
 
@@ -1974,7 +2011,12 @@ class CS3IPlayer : IPlayer {
                     val torboxEnabled = TorBox.isEnabled(context)
                     val realDebridEnabled = RealDebrid.isEnabled(context)
                     val anyDebridEnabled = torrinEnabled || torboxEnabled || realDebridEnabled
-                    if (link.type == ExtractorLinkType.MAGNET && anyDebridEnabled) {
+                    // When local torrent streaming is the primary path, skip debrid
+                    // resolution entirely so the magnet goes through the local engine
+                    // without waiting for debrid APIs that the user chose not to use.
+                    val localTorrentPrimary = PreferenceManager.getDefaultSharedPreferences(context)
+                        .getBoolean("local_torrent_primary_key", true)
+                    if (link.type == ExtractorLinkType.MAGNET && anyDebridEnabled && !localTorrentPrimary) {
                         ioSafe {
                             val debridHint = link.url
                                 .substringAfterLast("cs_debrid=", "")

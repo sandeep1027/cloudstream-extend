@@ -88,6 +88,34 @@ object SettingsPlayerScreen : SearchableSettings {
                 ),
             ),
             Preference.PreferenceGroup(
+                title = stringResource(R.string.pref_category_torrent),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(R.string.debrid_optional_title),
+                        subtitle = stringResource(R.string.debrid_optional_des),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.localTorrentPrimary,
+                        title = stringResource(R.string.local_torrent_primary),
+                        subtitle = stringResource(R.string.local_torrent_primary_des),
+                        icon = painterResource(R.drawable.dns_24px),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = settings.debrid.autoAcceptTorrent,
+                        title = stringResource(R.string.auto_accept_torrent),
+                        subtitle = stringResource(R.string.auto_accept_torrent_des),
+                        icon = painterResource(R.drawable.ic_baseline_check_24),
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        preference = settings.debrid.torrentPrebufferMb,
+                        title = stringResource(R.string.torrent_prebuffer),
+                        subtitle = stringResource(R.string.torrent_prebuffer_des),
+                        valueRange = 5..50,
+                        steps = 9,
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
                 title = stringResource(R.string.pref_category_debrid),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.SwitchPreference(

@@ -383,6 +383,7 @@
     <string name="pref_category_accounts">Accounts</string>
     <string name="pref_category_player_features">Player features</string>
     <string name="pref_category_subtitles">Subtitles</string>
+    <string name="pref_category_torrent">Torrent Streaming</string>
     <string name="pref_category_debrid">Debrid</string>
     <string name="prowlarr_category">Prowlarr</string>
     <string name="prowlarr_host">Prowlarr address</string>
@@ -771,6 +772,15 @@
     <string name="subs_edge_size">Edge Size</string>
     <string name="torrent_preferred_media">Enable torrent in Settings/Providers/Preferred media</string>
     <string name="torrent_not_accepted">Restart app and accept Stream Torrent pop-up to proceed.</string>
+    <string name="always_allow">Always allow</string>
+    <string name="local_torrent_primary">Use local torrent engine first</string>
+    <string name="local_torrent_primary_des">Stream directly from the local torrent engine instead of debrid services. Debrids become optional accelerators when enabled.</string>
+    <string name="auto_accept_torrent">Auto-accept torrent consent</string>
+    <string name="auto_accept_torrent_des">Skip the consent dialog for torrent streaming</string>
+    <string name="torrent_prebuffer">Pre-buffer amount (MB)</string>
+    <string name="torrent_prebuffer_des">Amount to buffer before playback starts. Higher values reduce initial buffering but use more memory.</string>
+    <string name="debrid_optional_title">About Debrid Services</string>
+    <string name="debrid_optional_des">Debrid services are optional accelerators. The local torrent engine works without them. Enable debrids only if you have subscriptions and want faster startup on popular torrents.</string>
     <string name="software_decoding">Software decoding</string>
     <string name="software_decoding_desc">Software decoding enables the player to play video files not supported by your device, but may cause laggy or unstable playback on high resolution.</string>
     <string name="volume_exceeded_100">Volume has exceeded 100%</string>

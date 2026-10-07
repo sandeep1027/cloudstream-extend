@@ -1207,6 +1207,14 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(this)
 
+        // Migration: set local torrent primary based on whether user has debrids enabled
+        if (!settingsManager.contains("local_torrent_primary_key")) {
+            val hasDebrids = settingsManager.getBoolean("torrin_enabled_key", false) ||
+                    settingsManager.getBoolean("torbox_enabled_key", false) ||
+                    settingsManager.getBoolean("realdebrid_enabled_key", false)
+            settingsManager.edit { putBoolean("local_torrent_primary_key", !hasDebrids) }
+        }
+
         setLastError(this)
 
         val settingsForProvider = SettingsJson()
